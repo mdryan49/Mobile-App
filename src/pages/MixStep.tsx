@@ -27,7 +27,7 @@ import { useRenderJobs } from '../hooks/useRenderJobs'
 import { deletePhoto, getPhotoBlob, putPhoto } from '../lib/db'
 import { calculateEstimate, money, moneyRange } from '../lib/estimate'
 import { newId } from '../lib/id'
-import { activeVersion, rendersFor } from '../lib/looks'
+import { activeVersion, renderKey, rendersFor, withActive } from '../lib/looks'
 import { CHANGE_LABELS, changesPrompt, fullRenderPrompt, nearestAspectRatio, pendingChanges } from '../lib/prompt'
 import { jobKey, startRender } from '../lib/renderJobs'
 import { useSettings } from '../lib/settings'
@@ -90,20 +90,21 @@ function StartCustom() {
   }
 
   async function start(tier: Tier) {
-    const base = activeVersion(project, tier)
-    let copied: Project['renders'][number] | undefined
-    if (base) {
-      const blob = await getPhotoBlob(base.id)
-      if (blob) {
-        copied = { ...base, id: newId(), look: 'custom', createdAt: Date.now(), label: `Started from ${TIER_LABELS[tier]}`, parentId: base.id }
-        await putPhoto(project.id, copied.id, blob)
-      }
+    // Copy this package's current rendering of every photo into the custom mix
+    const copies: Project['renders'] = []
+    for (const photo of project.photos) {
+      const base = activeVersion(project, tier, photo.id)
+      const blob = base && (await getPhotoBlob(base.id))
+      if (!base || !blob) continue
+      const copy = { ...base, id: newId(), look: 'custom' as const, createdAt: Date.now(), label: `Started from ${TIER_LABELS[tier]}`, parentId: base.id }
+      await putPhoto(project.id, copy.id, blob)
+      copies.push(copy)
     }
     update((p) => ({
       ...p,
       custom: { selection: structuredClone(p.selections[tier]), baseTier: tier },
-      renders: copied ? [...p.renders, copied] : p.renders,
-      activeRender: copied ? { ...p.activeRender, custom: copied.id } : p.activeRender,
+      renders: [...p.renders, ...copies],
+      activeRender: { ...p.activeRender, ...Object.fromEntries(copies.map((c) => [renderKey('custom', c.sourcePhotoId), c.id])) },
     }))
   }
 
@@ -114,7 +115,7 @@ function StartCustom() {
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         {TIERS.map((t) => {
           const est = calculateEstimate(m, project.selections[t], t, settings.pricing)
-          return <StartCard key={t} tier={t} renderId={project.activeRender[t]} range={moneyRange(est.low, est.high)} onStart={() => start(t)} />
+          return <StartCard key={t} tier={t} renderId={activeVersion(project, t)?.id} range={moneyRange(est.low, est.high)} onStart={() => start(t)} />
         })}
       </div>
     </section>
@@ -156,7 +157,8 @@ function MixEditor() {
   const heroUrl = usePhotoUrl(hero?.id)
   const active = activeVersion(project, 'custom')
   const activeUrl = usePhotoUrl(active?.id)
-  const job = jobs.get(jobKey(project.id, 'custom'))
+  const heroId = project.heroPhotoId ?? ''
+  const job = jobs.get(jobKey(project.id, 'custom', heroId))
   const pending = active ? pendingChanges(active.selection, sel) : []
   const versions = rendersFor(project, 'custom')
   const cat = CATEGORIES[catIdx]
@@ -181,6 +183,7 @@ function MixEditor() {
     void startRender({
       projectId: project.id,
       look: 'custom',
+      photoId: hero.id,
       source,
       prompt: active ? changesPrompt(sel, pending) : fullRenderPrompt(sel, project.declutter),
       aspectRatio: nearestAspectRatio(active?.width ?? hero.width, active?.height ?? hero.height),
@@ -195,7 +198,7 @@ function MixEditor() {
     setConfirmReset(false)
     const ids = project.renders.filter((r) => r.look === 'custom').map((r) => r.id)
     update((p) => {
-      const { custom: _drop, ...activeRender } = p.activeRender
+      const activeRender = Object.fromEntries(Object.entries(p.activeRender).filter(([k]) => !k.startsWith('custom@')))
       return { ...p, custom: null, renders: p.renders.filter((r) => r.look !== 'custom'), activeRender }
     })
     await Promise.all(ids.map(deletePhoto))
@@ -239,7 +242,7 @@ function MixEditor() {
             </div>
           )}
 
-          {job?.status === 'error' && <RenderError job={job} projectId={project.id} look="custom" />}
+          {job?.status === 'error' && <RenderError job={job} projectId={project.id} look="custom" photoId={heroId} />}
 
           {pending.length > 0 && job?.status !== 'running' && (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-accent bg-accent/5 p-4">
@@ -257,7 +260,7 @@ function MixEditor() {
             onSelect={(v) =>
               update((p) => ({
                 ...p,
-                activeRender: { ...p.activeRender, custom: v.id },
+                activeRender: withActive(p, 'custom', heroId, v.id),
                 custom: { ...p.custom!, selection: structuredClone(v.selection) },
               }))
             }

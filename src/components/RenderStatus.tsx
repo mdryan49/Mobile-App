@@ -23,14 +23,14 @@ export function RenderingOverlay({ imageUrl, startedAt }: { imageUrl: string | n
   )
 }
 
-export function RenderError({ job, projectId, look }: { job: JobState; projectId: string; look: LookKey }) {
+export function RenderError({ job, projectId, look, photoId }: { job: JobState; projectId: string; look: LookKey; photoId: string }) {
   return (
     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-red-200 bg-red-50 p-4">
       <p className="text-red-800">
         <strong>Rendering didn't finish.</strong> {job.error} Nothing was lost.
       </p>
       <div className="flex gap-2">
-        <Button variant="secondary" onClick={() => dismissJob(projectId, look)}>
+        <Button variant="secondary" onClick={() => dismissJob(projectId, look, photoId)}>
           Dismiss
         </Button>
         <Button onClick={() => void startRender(job.request)}>Retry</Button>

@@ -3,6 +3,7 @@ import type { LookKey, Project, RenderVersion } from '../types'
 import { getProject, putPhoto, saveProject } from './db'
 import { newId } from './id'
 import { compressImage } from './image'
+import { renderKey } from './looks'
 
 /**
  * Background render queue. Jobs keep running if the salesperson switches
@@ -20,6 +21,8 @@ export interface JobState {
 export interface RenderRequest {
   projectId: string
   look: LookKey
+  /** Kitchen photo being restyled (the source may be that photo or an earlier rendering of it) */
+  photoId: string
   source: Blob
   prompt: string
   aspectRatio: string
@@ -41,7 +44,7 @@ const emit = () => {
   listeners.forEach((l) => l())
 }
 
-export const jobKey = (projectId: string, look: LookKey) => `${projectId}:${look}`
+export const jobKey = (projectId: string, look: LookKey, photoId: string) => `${projectId}:${look}:${photoId}`
 
 export function subscribeJobs(cb: () => void) {
   listeners.add(cb)
@@ -57,13 +60,13 @@ export function registerProjectUpdater(projectId: string, fn: Updater) {
   }
 }
 
-export function dismissJob(projectId: string, look: LookKey) {
-  jobs.delete(jobKey(projectId, look))
+export function dismissJob(projectId: string, look: LookKey, photoId: string) {
+  jobs.delete(jobKey(projectId, look, photoId))
   emit()
 }
 
 export async function startRender(req: RenderRequest): Promise<void> {
-  const key = jobKey(req.projectId, req.look)
+  const key = jobKey(req.projectId, req.look, req.photoId)
   if (jobs.get(key)?.status === 'running') return
   jobs.set(key, { status: 'running', startedAt: Date.now(), request: req })
   emit()
@@ -76,6 +79,7 @@ export async function startRender(req: RenderRequest): Promise<void> {
       createdAt: Date.now(),
       selection: structuredClone(req.selection),
       label: req.label,
+      sourcePhotoId: req.photoId,
       parentId: req.parentId,
       width,
       height,
@@ -84,7 +88,7 @@ export async function startRender(req: RenderRequest): Promise<void> {
     await applyToProject(req.projectId, (p) => ({
       ...p,
       renders: [...p.renders, version],
-      activeRender: { ...p.activeRender, [req.look]: version.id },
+      activeRender: { ...p.activeRender, [renderKey(req.look, req.photoId)]: version.id },
     }))
     jobs.delete(key)
   } catch (e) {

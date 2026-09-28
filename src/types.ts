@@ -53,6 +53,8 @@ export interface RenderVersion {
   selection: Selection
   /** Human label, e.g. "Initial render" or "Countertop → Cambria Ella" */
   label: string
+  /** Which kitchen photo this rendering restyles */
+  sourcePhotoId: string
   /** Rendering this one was edited from (Mix & Match), if any */
   parentId?: string
   width: number
@@ -71,8 +73,8 @@ export interface Project {
   /** The chosen look for each tier (starts from catalog defaults; edited in Mix & Match) */
   selections: Record<Tier, Selection>
   renders: RenderVersion[]
-  /** Which rendering is currently shown for each look */
-  activeRender: Partial<Record<LookKey, string>>
+  /** Rendering currently shown for each look + photo. Key: `${look}@${photoId}` (see lib/looks.ts) */
+  activeRender: Record<string, string>
   /** The homeowner's own mix (Mix & Match). Priced with the base tier's labor rates. */
   custom: { selection: Selection; baseTier: Tier } | null
   /** Ask the AI to tidy countertop clutter in renderings */

@@ -75,9 +75,21 @@ export function normalizeProject(p: Project): Project {
       better: { ...TIER_DEFAULTS.better, ...p.selections?.better },
       best: { ...TIER_DEFAULTS.best, ...p.selections?.best },
     },
-    renders: p.renders ?? [],
-    activeRender: p.activeRender ?? {},
+    ...migrateRenders(p),
     custom: p.custom ? { ...p.custom, selection: { ...TIER_DEFAULTS[p.custom.baseTier], ...p.custom.selection } } : null,
     declutter: p.declutter ?? true,
   }
+}
+
+/** Older saves had renders of the hero photo only, keyed by look. Attach them to that photo. */
+function migrateRenders(p: Project): Pick<Project, 'renders' | 'activeRender'> {
+  const hero = p.heroPhotoId ?? ''
+  const renders = (p.renders ?? []).map((r) => (r.sourcePhotoId ? r : { ...r, sourcePhotoId: hero }))
+  const activeRender: Record<string, string> = {}
+  for (const [k, v] of Object.entries(p.activeRender ?? {})) {
+    if (!v) continue
+    if (k.includes('@')) activeRender[k] = v
+    else activeRender[`${k}@${renders.find((r) => r.id === v)?.sourcePhotoId ?? hero}`] = v
+  }
+  return { renders, activeRender }
 }

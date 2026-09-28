@@ -84,8 +84,18 @@ export async function duplicateProject(id: string): Promise<Project | undefined>
   }
   copy.photos = src.photos.map((ph) => ({ ...ph, id: remap(ph.id) }))
   copy.heroPhotoId = src.heroPhotoId ? remap(src.heroPhotoId) : null
-  copy.renders = src.renders.map((r) => ({ ...r, id: remap(r.id), parentId: r.parentId && remap(r.parentId) }))
-  copy.activeRender = Object.fromEntries(Object.entries(src.activeRender).map(([k, v]) => [k, v && remap(v)]))
+  copy.renders = src.renders.map((r) => ({
+    ...r,
+    id: remap(r.id),
+    sourcePhotoId: remap(r.sourcePhotoId),
+    parentId: r.parentId && remap(r.parentId),
+  }))
+  copy.activeRender = Object.fromEntries(
+    Object.entries(src.activeRender).map(([k, v]) => {
+      const [look, photoId] = k.split('@')
+      return [`${look}@${remap(photoId)}`, remap(v)]
+    }),
+  )
 
   const tx = d.transaction(['projects', 'photos'], 'readwrite')
   for (const [oldId, nid] of idMap) {
