@@ -1,7 +1,9 @@
+import { useEffect } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import { Button, Logo } from '../components/ui'
 import { STEPS } from '../config/steps'
 import { useProject } from '../hooks/useProject'
+import { registerProjectUpdater } from '../lib/renderJobs'
 import type { Project } from '../types'
 
 export interface ProjectContext {
@@ -16,6 +18,9 @@ export default function ProjectLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const { project, notFound, update, saveState } = useProject(id)
+
+  // Let background renders merge into this project's live, autosaved state
+  useEffect(() => (id ? registerProjectUpdater(id, update) : undefined), [id, update])
 
   if (notFound) {
     return (

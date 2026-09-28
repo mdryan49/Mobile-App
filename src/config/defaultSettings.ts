@@ -47,12 +47,15 @@ export interface Salesperson {
 
 export interface AppSettings {
   pin: string
+  /** Must match RENDER_ACCESS_CODE on Netlify (if that is set). Stops strangers using your AI credits. */
+  renderAccessCode: string
   salesperson: Salesperson
   pricing: PricingSettings
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   pin: '1234',
+  renderAccessCode: '',
   salesperson: { name: '', phone: '', email: '' },
   pricing: {
     markupPct: 35,

@@ -7,6 +7,7 @@ import ComingSoon from './pages/ComingSoon'
 import ScopeStep from './pages/ScopeStep'
 import EstimateStep from './pages/EstimateStep'
 import SettingsPage from './pages/SettingsPage'
+import RenderingsStep from './pages/RenderingsStep'
 
 export default function App() {
   return (
@@ -19,7 +20,7 @@ export default function App() {
         <Route path="photos" element={<PhotosStep />} />
         <Route path="scope" element={<ScopeStep />} />
         <Route path="estimate" element={<EstimateStep />} />
-        <Route path="renderings" element={<ComingSoon title="Renderings" phase={3} />} />
+        <Route path="renderings" element={<RenderingsStep />} />
         <Route path="mix" element={<ComingSoon title="Mix & match" phase={4} pricing />} />
         <Route path="proposal" element={<ComingSoon title="Proposal PDF" phase={5} pricing />} />
       </Route>

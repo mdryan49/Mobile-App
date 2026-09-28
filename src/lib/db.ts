@@ -66,8 +66,9 @@ export async function deleteProject(id: string): Promise<void> {
 /** Deep copy of a project, including its photo blobs, under new IDs. */
 export async function duplicateProject(id: string): Promise<Project | undefined> {
   const d = await db()
-  const src = await d.get('projects', id)
-  if (!src) return undefined
+  const raw = await d.get('projects', id)
+  if (!raw) return undefined
+  const src = normalizeProject(raw)
   const now = Date.now()
   const copy: Project = structuredClone(src)
   copy.id = newId()
@@ -77,12 +78,14 @@ export async function duplicateProject(id: string): Promise<Project | undefined>
   copy.customer.name = `${src.customer.name || 'Untitled'} (copy)`
 
   const idMap = new Map<string, string>()
-  copy.photos = src.photos.map((ph) => {
-    const nid = newId()
-    idMap.set(ph.id, nid)
-    return { ...ph, id: nid }
-  })
-  copy.heroPhotoId = src.heroPhotoId ? idMap.get(src.heroPhotoId) ?? null : null
+  const remap = (id: string) => {
+    if (!idMap.has(id)) idMap.set(id, newId())
+    return idMap.get(id)!
+  }
+  copy.photos = src.photos.map((ph) => ({ ...ph, id: remap(ph.id) }))
+  copy.heroPhotoId = src.heroPhotoId ? remap(src.heroPhotoId) : null
+  copy.renders = src.renders.map((r) => ({ ...r, id: remap(r.id), parentId: r.parentId && remap(r.parentId) }))
+  copy.activeRender = Object.fromEntries(Object.entries(src.activeRender).map(([k, v]) => [k, v && remap(v)]))
 
   const tx = d.transaction(['projects', 'photos'], 'readwrite')
   for (const [oldId, nid] of idMap) {

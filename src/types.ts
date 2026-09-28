@@ -42,6 +42,23 @@ export interface Measurements {
   permits: boolean
 }
 
+export type LookKey = Tier | 'custom'
+
+/** One AI rendering. The image Blob is stored in the `photos` store under the same id. */
+export interface RenderVersion {
+  id: string
+  look: LookKey
+  createdAt: number
+  /** Materials this rendering shows */
+  selection: Selection
+  /** Human label, e.g. "Initial render" or "Countertop → Cambria Ella" */
+  label: string
+  /** Rendering this one was edited from (Mix & Match), if any */
+  parentId?: string
+  width: number
+  height: number
+}
+
 export interface Project {
   id: string
   createdAt: number
@@ -53,6 +70,11 @@ export interface Project {
   measurements: Measurements
   /** The chosen look for each tier (starts from catalog defaults; edited in Mix & Match) */
   selections: Record<Tier, Selection>
+  renders: RenderVersion[]
+  /** Which rendering is currently shown for each look */
+  activeRender: Partial<Record<LookKey, string>>
+  /** Ask the AI to tidy countertop clutter in renderings */
+  declutter: boolean
 }
 
 export interface StoredPhoto {

@@ -158,3 +158,54 @@ export const money = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 
 export const moneyRange = (low: number, high: number) => `${money(low)} – ${money(high)}`
+
+// ---------------- Homeowner view: grouped categories ----------------
+
+export type GroupKey = 'cabinetry' | 'surfaces' | 'fixtures' | 'site' | 'finishes' | 'contingency'
+
+export const GROUPS: { key: GroupKey; label: string; lines: LineKey[] }[] = [
+  { key: 'cabinetry', label: 'Cabinetry & installation', lines: ['cabinets', 'hardware', 'installation'] },
+  { key: 'surfaces', label: 'Countertops & backsplash', lines: ['countertops', 'backsplash'] },
+  { key: 'fixtures', label: 'Sink, faucet & lighting', lines: ['sinkFaucet', 'lighting'] },
+  { key: 'site', label: 'Demolition, trades & permits', lines: ['demo', 'plumbing', 'electrical', 'permits'] },
+  { key: 'finishes', label: 'Flooring & paint', lines: ['flooring', 'paint'] },
+  { key: 'contingency', label: 'Contingency', lines: ['contingency'] },
+]
+
+export interface EstimateGroup {
+  key: GroupKey
+  label: string
+  amount: number
+  detail: string
+}
+
+const SITE_WORDS: Partial<Record<LineKey, string>> = {
+  demo: 'demolition & haul-away',
+  plumbing: 'plumbing',
+  electrical: 'electrical',
+  permits: 'permits',
+}
+
+/** Rolls line items up into homeowner-friendly categories (empty groups are dropped). */
+export function groupEstimate(est: Estimate, sel: Selection): EstimateGroup[] {
+  const r = resolveSelection(sel)
+  const byKey = new Map(est.lines.map((l) => [l.key, l]))
+  const has = (k: LineKey) => byKey.has(k)
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+  const details: Record<GroupKey, string> = {
+    cabinetry: byKey.get('cabinets')?.detail ?? '',
+    surfaces: `${r.countertop.brand} ${r.countertop.name} counters, ${r.backsplash.name} backsplash`,
+    fixtures: `Kohler ${r.sinkFaucet.name}, ${r.faucetFinish.name}${has('lighting') ? ' + new lighting' : ''}`,
+    site: cap(GROUPS[3].lines.filter(has).map((k) => SITE_WORDS[k]).join(', ')),
+    finishes: [has('flooring') && 'New flooring', has('paint') && `${r.paint.name} walls`].filter(Boolean).join(', '),
+    contingency: byKey.get('contingency')?.detail ?? '',
+  }
+
+  return GROUPS.map((g) => ({
+    key: g.key,
+    label: g.label,
+    amount: g.lines.reduce((sum, k) => sum + (byKey.get(k)?.amount ?? 0), 0),
+    detail: details[g.key],
+  })).filter((g) => g.amount > 0)
+}

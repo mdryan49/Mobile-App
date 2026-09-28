@@ -3,12 +3,6 @@
   publish = "dist"
   functions = "netlify/functions"
 
-# AI rendering endpoint (added in Phase 3)
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-
 # Single-page app fallback
 [[redirects]]
   from = "/*"

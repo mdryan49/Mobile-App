@@ -1,9 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { PinModal } from '../components/PinPad'
+import { useStaffUnlocked } from '../lib/pinLock'
 import { useNavigate } from 'react-router-dom'
 import { Swatch } from '../components/Swatch'
 import { Button, SamplePricingBadge } from '../components/ui'
 import { TIER_LABELS, TIERS, resolveSelection, type Tier } from '../config/catalog'
-import { calculateEstimate, LINE_LABELS, money, moneyRange, type Estimate, type LineKey } from '../lib/estimate'
+import { calculateEstimate, groupEstimate, GROUPS, LINE_LABELS, money, moneyRange, type Estimate, type EstimateGroup, type GroupKey, type LineKey } from '../lib/estimate'
 import { useSettings } from '../lib/settings'
 import { useProjectContext } from './ProjectLayout'
 
@@ -11,6 +13,9 @@ export default function EstimateStep() {
   const { project } = useProjectContext()
   const { settings } = useSettings()
   const navigate = useNavigate()
+  const staffUnlocked = useStaffUnlocked()
+  const [staffView, setStaffView] = useState(false)
+  const [askPin, setAskPin] = useState(false)
   const m = project.measurements
 
   const estimates = useMemo(
@@ -35,8 +40,22 @@ export default function EstimateStep() {
     )
   }
 
+  const detailed = staffView && staffUnlocked
   const lineKeys = estimates.good.lines.map((l) => l.key)
   const amountOf = (t: Tier, k: LineKey) => estimates[t].lines.find((l) => l.key === k)
+  const groups = Object.fromEntries(TIERS.map((t) => [t, groupEstimate(estimates[t], project.selections[t])])) as Record<Tier, EstimateGroup[]>
+  const groupKeys = GROUPS.map((g) => g.key).filter((k) => groups.good.some((g) => g.key === k))
+  const groupOf = (t: Tier, k: GroupKey) => groups[t].find((g) => g.key === k)
+
+  const rows: { key: string; label: string; cell: (t: Tier) => { amount: number; detail: string } | undefined }[] = detailed
+    ? lineKeys.map((k) => ({ key: k, label: LINE_LABELS[k], cell: (t) => amountOf(t, k) }))
+    : groupKeys.map((k) => ({ key: k, label: GROUPS.find((g) => g.key === k)!.label, cell: (t) => groupOf(t, k) }))
+
+  function toggleStaff() {
+    if (staffView) setStaffView(false)
+    else if (staffUnlocked) setStaffView(true)
+    else setAskPin(true)
+  }
 
   return (
     <section>
@@ -45,8 +64,18 @@ export default function EstimateStep() {
           <h1 className="text-3xl font-bold">Your estimate</h1>
           <p className="mt-1 text-neutral-600">Three ways to get the kitchen you want. Final price confirmed after a site measure.</p>
         </div>
-        <SamplePricingBadge />
+        <div className="flex flex-wrap items-center gap-3">
+          <SamplePricingBadge />
+          <Button variant="secondary" onClick={toggleStaff} className="min-h-11 text-[15px]">
+            {detailed ? 'Homeowner view' : '🔒 Staff detail'}
+          </Button>
+        </div>
       </div>
+      {detailed && (
+        <div className="mt-4 rounded-xl bg-neutral-900 px-4 py-3 text-sm text-white">
+          Staff detail: every line item. Tap <strong>Homeowner view</strong> before showing the customer.
+        </div>
+      )}
 
       <div className="mt-6 overflow-hidden rounded-2xl border-2 border-neutral-100">
         <table className="w-full table-fixed border-collapse text-left">
@@ -67,11 +96,11 @@ export default function EstimateStep() {
             </tr>
           </thead>
           <tbody>
-            {lineKeys.map((k) => (
-              <tr key={k} className="border-t border-neutral-100">
-                <td className="p-4 align-top font-semibold">{LINE_LABELS[k]}</td>
+            {rows.map((row) => (
+              <tr key={row.key} className="border-t border-neutral-100">
+                <td className="p-4 align-top font-semibold">{row.label}</td>
                 {TIERS.map((t) => {
-                  const line = amountOf(t, k)
+                  const line = row.cell(t)
                   return (
                     <td key={t} className={`p-4 align-top ${t === 'better' ? 'bg-accent/5' : ''}`}>
                       <div className="text-[17px] font-semibold tabular-nums">{line ? money(line.amount) : '—'}</div>
@@ -100,6 +129,14 @@ export default function EstimateStep() {
         Ranges are ±{settings.pricing.rangePct}%. Line items are shown for comparison and include all labor, materials and
         project management.
       </p>
+      <PinModal
+        open={askPin}
+        onClose={() => setAskPin(false)}
+        onUnlock={() => {
+          setAskPin(false)
+          setStaffView(true)
+        }}
+      />
     </section>
   )
 }

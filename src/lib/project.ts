@@ -58,6 +58,9 @@ export function emptyProject(): Project {
     heroPhotoId: null,
     measurements: { ...DEFAULT_MEASUREMENTS },
     selections: structuredClone(TIER_DEFAULTS),
+    renders: [],
+    activeRender: {},
+    declutter: true,
   }
 }
 
@@ -71,5 +74,8 @@ export function normalizeProject(p: Project): Project {
       better: { ...TIER_DEFAULTS.better, ...p.selections?.better },
       best: { ...TIER_DEFAULTS.best, ...p.selections?.best },
     },
+    renders: p.renders ?? [],
+    activeRender: p.activeRender ?? {},
+    declutter: p.declutter ?? true,
   }
 }

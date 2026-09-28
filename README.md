@@ -3,7 +3,7 @@
 An iPad web app (installable PWA) for in-home kitchen remodel consultations.
 Everything is stored **on the iPad only** (IndexedDB). No login, no cloud database.
 
-> Status: **Phase 2 of 5**: home screen, customer info, photos, demo mode, measurements, Good/Better/Best estimate, PIN-protected settings.
+> Status: **Phase 3 of 5**: home screen, customer info, photos, demo mode, measurements, grouped Good/Better/Best estimate, PIN-protected settings, AI renderings with before/after slider.
 > Full setup docs (Gemini key, Netlify deploy, catalog & pricing) arrive in Phase 5.
 
 ## Run locally
@@ -63,6 +63,31 @@ Everything is saved on that iPad. Starting values are in `src/config/defaultSett
 
 All pricing is labeled **"Sample pricing - for demonstration only"** until real pricing is loaded.
 
+## AI renderings (Gemini "Nano Banana")
+
+Renderings go through a Netlify Function (`netlify/functions/render.mts`) at `/api/render`.
+**The Gemini key never touches the iPad or the code.** It lives only in Netlify.
+
+Netlify → your site → **Project configuration → Environment variables**:
+
+| Variable | Required | What it does |
+|---|---|---|
+| `GEMINI_API_KEY` | Yes | Your key from Google AI Studio |
+| `RENDER_ACCESS_CODE` | Recommended | Any secret phrase. Enter the same phrase on the iPad in Settings → AI renderings. Stops strangers from using your AI credits. |
+| `GEMINI_IMAGE_MODEL` | No | Defaults to `gemini-3.1-flash-image` (Nano Banana 2). Use `gemini-3-pro-image` for higher quality. |
+
+After changing environment variables, redeploy so the function picks them up.
+The prompts live in `src/lib/prompt.ts`.
+
+## Deploy to Netlify
+
+```bash
+npx netlify-cli deploy --build --prod   # after `npx netlify-cli link`
+```
+
+Or connect the GitHub repo in the Netlify UI (build command `npm run build`, publish `dist`).
+Local `npm run dev` does not run the AI function; test renderings on the deployed site.
+
 ## Project structure
 
 ```
@@ -75,5 +100,7 @@ src/lib/db.ts           IndexedDB storage (projects, photos, settings)
 src/lib/image.ts        Photo compression (max 1600px JPEG)
 src/lib/demo.ts         Demo consultation loader
 src/pages/              Screens
-netlify/functions/      Server-side Gemini proxy (Phase 3)
+netlify/functions/      Server-side Gemini proxy (keeps the API key secret)
+src/lib/prompt.ts       AI rendering prompts
+src/lib/renderJobs.ts   Render queue with retry
 ```

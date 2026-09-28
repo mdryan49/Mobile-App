@@ -66,12 +66,13 @@ export interface DoorStyle {
   /** Multiplies the cabinet line price */
   priceMultiplier: number
   description: string
+  promptText: string
 }
 
 export const DOOR_STYLES: DoorStyle[] = [
-  { id: 'shaker', name: 'Shaker', priceMultiplier: 1.0, description: 'Five-piece door with recessed center panel' },
-  { id: 'slab', name: 'Slab', priceMultiplier: 0.95, description: 'Flat, modern, no frame' },
-  { id: 'raised', name: 'Raised Panel', priceMultiplier: 1.08, description: 'Traditional raised center panel' },
+  { id: 'shaker', name: 'Shaker', priceMultiplier: 1.0, description: 'Five-piece door with recessed center panel', promptText: 'shaker-style five-piece doors with a recessed flat center panel' },
+  { id: 'slab', name: 'Slab', priceMultiplier: 0.95, description: 'Flat, modern, no frame', promptText: 'flat modern slab doors and drawer fronts with no frame detail' },
+  { id: 'raised', name: 'Raised Panel', priceMultiplier: 1.08, description: 'Traditional raised center panel', promptText: 'traditional raised-panel doors' },
 ]
 
 export interface CabinetFinish {
@@ -129,6 +130,26 @@ export const COUNTERTOPS: Countertop[] = [
   cambria('ca-portrush', 'Portrush', 108, { color: '#dcdad5', accent: '#8b8984', pattern: 'speckle' }),
   cambria('ca-torquay', 'Torquay', 106, { color: '#f1efea', accent: '#c9c5bd', pattern: 'speckle' }),
 ]
+
+/** How each countertop looks, in plain English, for AI rendering prompts */
+export const COUNTERTOP_LOOKS: Record<string, string> = {
+  'az-luna-pearl': 'light gray granite with fine black and silver speckles',
+  'az-colonial-white': 'creamy white granite with soft gray and burgundy flecks',
+  'az-steel-grey': 'dark steel gray granite with a fine even grain',
+  'az-absolute-black': 'solid deep black granite with a subtle sheen',
+  'az-santa-cecilia': 'golden beige granite with brown and burgundy speckles',
+  'si-miami-white': 'pure bright white solid quartz with no pattern',
+  'si-calacatta-gold': 'white quartz with dramatic soft gold and gray marble-style veining',
+  'si-desert-silver': 'light silver-gray quartz with a subtle fine grain',
+  'si-charcoal-soapstone': 'matte charcoal soapstone-look quartz with faint light veins',
+  'si-et-marquina': 'black quartz with bold crisp white marble-style veining',
+  'ca-brittanicca': 'bright white quartz with bold flowing gray marble-style veins',
+  'ca-skara-brae': 'warm white quartz with soft taupe and cream veining',
+  'ca-inverness-frost': 'frosty white quartz with delicate gray veining',
+  'ca-ella': 'soft white quartz with thin elegant gray veins',
+  'ca-portrush': 'light gray quartz with a subtle cloudy texture',
+  'ca-torquay': 'white quartz with a soft, subtle pearl-gray speckle',
+}
 
 // ---------------- Backsplash tile (Arizona Tile, per sq ft material) ----------------
 
