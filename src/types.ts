@@ -1,3 +1,5 @@
+import type { Selection, Tier } from './config/catalog'
+
 export interface Customer {
   name: string
   address: string
@@ -14,6 +16,32 @@ export interface PhotoRef {
   addedAt: number
 }
 
+export type Layout = 'l-shape' | 'u-shape' | 'galley' | 'single-wall'
+export type DemoScope = 'full-gut' | 'cabinets-counters' | 'refresh'
+
+export interface Measurements {
+  layout: Layout
+  hasIsland: boolean
+  baseCabinetLf: number
+  wallCabinetLf: number
+  islandLengthFt: number
+  islandWidthFt: number
+  countertopSqft: number
+  /** true once the salesperson overrides the suggested value */
+  countertopManual: boolean
+  backsplashSqft: number
+  backsplashManual: boolean
+  demoScope: DemoScope
+  movePlumbing: boolean
+  electricalUpdates: boolean
+  newFlooring: boolean
+  flooringSqft: number
+  paintWalls: boolean
+  paintSqft: number
+  newLighting: boolean
+  permits: boolean
+}
+
 export interface Project {
   id: string
   createdAt: number
@@ -22,7 +50,9 @@ export interface Project {
   customer: Customer
   photos: PhotoRef[]
   heroPhotoId: string | null
-  // Measurements, selections, renders and versions are added in later phases.
+  measurements: Measurements
+  /** The chosen look for each tier (starts from catalog defaults; edited in Mix & Match) */
+  selections: Record<Tier, Selection>
 }
 
 export interface StoredPhoto {

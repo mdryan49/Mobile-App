@@ -5,6 +5,7 @@ import { registerSW } from 'virtual:pwa-register'
 import App from './App'
 import { BRAND } from './config/brand'
 import { requestPersistentStorage } from './lib/db'
+import { SettingsProvider } from './lib/settings'
 import './index.css'
 
 // Push brand colors from src/config/brand.ts into CSS so Tailwind's `accent` follows them.
@@ -19,7 +20,9 @@ void requestPersistentStorage()
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
+      <SettingsProvider>
+        <App />
+      </SettingsProvider>
     </BrowserRouter>
   </StrictMode>,
 )

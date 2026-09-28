@@ -1,6 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import type { Project, StoredPhoto } from '../types'
 import { newId } from './id'
+import { normalizeProject } from './project'
 
 interface ConsultDB extends DBSchema {
   projects: { key: string; value: Project; indexes: { updatedAt: number } }
@@ -38,28 +39,17 @@ export async function requestPersistentStorage(): Promise<boolean> {
 // ---------- Projects ----------
 
 export async function listProjects(): Promise<Project[]> {
-  const all = await (await db()).getAll('projects')
+  const all = (await (await db()).getAll('projects')).map(normalizeProject)
   return all.sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
 export async function getProject(id: string): Promise<Project | undefined> {
-  return (await db()).get('projects', id)
+  const p = await (await db()).get('projects', id)
+  return p && normalizeProject(p)
 }
 
 export async function saveProject(p: Project): Promise<void> {
   await (await db()).put('projects', p)
-}
-
-export function emptyProject(): Project {
-  const now = Date.now()
-  return {
-    id: newId(),
-    createdAt: now,
-    updatedAt: now,
-    customer: { name: '', address: '', phone: '', email: '', notes: '' },
-    photos: [],
-    heroPhotoId: null,
-  }
 }
 
 export async function deleteProject(id: string): Promise<void> {

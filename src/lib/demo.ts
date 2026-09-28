@@ -1,4 +1,5 @@
-import { emptyProject, putPhoto, saveProject } from './db'
+import { putPhoto, saveProject } from './db'
+import { applySuggestions, emptyProject } from './project'
 import { compressImage } from './image'
 import { newId } from './id'
 import type { Project } from '../types'
@@ -36,6 +37,24 @@ export async function createDemoProject(): Promise<Project> {
     notes:
       'Demo consultation. L-shape kitchen with a large island. Gray shaker cabinets, speckled granite, and white herringbone backsplash today. Homeowners want a fresher, more modern look and are open to new cabinet colors and quartz counters.',
   }
+  p.measurements = applySuggestions({
+    ...p.measurements,
+    layout: 'l-shape',
+    hasIsland: true,
+    baseCabinetLf: 20,
+    wallCabinetLf: 15,
+    islandLengthFt: 9,
+    islandWidthFt: 4.5,
+    demoScope: 'cabinets-counters',
+    movePlumbing: false,
+    electricalUpdates: true,
+    newFlooring: true,
+    flooringSqft: 260,
+    paintWalls: true,
+    paintSqft: 340,
+    newLighting: true,
+    permits: true,
+  })
   for (let i = 1; i <= DEMO_PHOTO_COUNT; i++) {
     const { blob, width, height } = await compressImage(await fetchDemoPhoto(i))
     const id = newId()

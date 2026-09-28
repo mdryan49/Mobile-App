@@ -104,3 +104,105 @@ export function Logo({ className = '' }: { className?: string }) {
     </svg>
   )
 }
+
+export function Toggle({
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  label: string
+  hint?: string
+  checked: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="flex min-h-16 w-full items-center justify-between gap-4 rounded-xl border-2 border-neutral-200 bg-white px-4 py-3 text-left active:bg-neutral-50"
+    >
+      <span>
+        <span className="block text-[17px] font-semibold">{label}</span>
+        {hint && <span className="block text-sm text-neutral-500">{hint}</span>}
+      </span>
+      <span className={`relative h-8 w-14 shrink-0 rounded-full transition-colors ${checked ? 'bg-accent' : 'bg-neutral-300'}`}>
+        <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${checked ? 'left-7' : 'left-1'}`} />
+      </span>
+    </button>
+  )
+}
+
+/** Numeric input that allows an empty field while typing and stores a number. */
+export function NumberInput({
+  value,
+  onChange,
+  suffix,
+  step = 1,
+  ...rest
+}: {
+  value: number
+  onChange: (n: number) => void
+  suffix?: string
+  step?: number
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>) {
+  return (
+    <div className="relative">
+      <input
+        type="number"
+        inputMode="decimal"
+        min={0}
+        step={step}
+        className={`${inputCls} min-h-13 ${suffix ? 'pr-16' : ''}`}
+        value={value === 0 ? '' : value}
+        placeholder="0"
+        onChange={(e) => {
+          const n = parseFloat(e.target.value)
+          onChange(Number.isFinite(n) && n >= 0 ? n : 0)
+        }}
+        {...rest}
+      />
+      {suffix && (
+        <span className="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-neutral-500">{suffix}</span>
+      )}
+    </div>
+  )
+}
+
+export function ChoiceGroup<T extends string>({
+  options,
+  value,
+  onChange,
+  columns = 4,
+}: {
+  options: { value: T; label: string; hint?: string }[]
+  value: T
+  onChange: (v: T) => void
+  columns?: 2 | 3 | 4
+}) {
+  const cols = { 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-2 md:grid-cols-4' }[columns]
+  return (
+    <div className={`grid gap-3 ${cols}`} role="radiogroup">
+      {options.map((o) => {
+        const active = o.value === value
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(o.value)}
+            className={`min-h-16 rounded-xl border-2 px-4 py-3 text-left ${
+              active ? 'border-accent bg-accent/5 text-black' : 'border-neutral-200 bg-white active:bg-neutral-50'
+            }`}
+          >
+            <span className={`block text-[17px] font-semibold ${active ? 'text-accent' : ''}`}>{o.label}</span>
+            {o.hint && <span className="block text-sm text-neutral-500">{o.hint}</span>}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
