@@ -1,15 +1,25 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import { Button, Logo } from '../components/ui'
 import { STEPS } from '../config/steps'
 import { useProject } from '../hooks/useProject'
+import { scopeToRoom, updateRoom } from '../lib/project'
 import { registerProjectUpdater } from '../lib/renderJobs'
-import type { Project } from '../types'
+import type { Project, StoredProject } from '../types'
 
 export interface ProjectContext {
+  /** The consultation seen from the room being worked on */
   project: Project
+  /** Change the current room (and shared fields like the customer) */
   update: (fn: (p: Project) => Project) => void
+  /** The whole consultation, all rooms */
+  stored: StoredProject
+  updateStored: (fn: (p: StoredProject) => StoredProject) => void
+  setRoom: (roomId: string) => void
 }
+
+/** Steps that belong to one room (the others cover the whole consultation). */
+const ROOM_STEPS = new Set(['photos', 'scope', 'design', 'estimate', 'renderings'])
 
 export const useProjectContext = () => useOutletContext<ProjectContext>()
 
@@ -17,10 +27,19 @@ export default function ProjectLayout() {
   const { id } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const { project, notFound, update, saveState } = useProject(id)
+  const { project: stored, notFound, update: updateStored, saveState } = useProject(id)
+  const [roomId, setRoomId] = useState<string | null>(null)
+  const activeRoomId = stored?.rooms.some((r) => r.id === roomId) ? roomId! : stored?.rooms[0]?.id
+  const project = useMemo(() => (stored ? scopeToRoom(stored, activeRoomId) : null), [stored, activeRoomId])
+  const update = useCallback(
+    (fn: (p: Project) => Project) => {
+      if (activeRoomId) updateStored((s) => updateRoom(s, activeRoomId, fn))
+    },
+    [updateStored, activeRoomId],
+  )
 
-  // Let background renders merge into this project's live, autosaved state
-  useEffect(() => (id ? registerProjectUpdater(id, update) : undefined), [id, update])
+  // Let background renders merge into this consultation's live, autosaved state
+  useEffect(() => (id ? registerProjectUpdater(id, updateStored) : undefined), [id, updateStored])
 
   if (notFound) {
     return (
@@ -30,11 +49,12 @@ export default function ProjectLayout() {
       </div>
     )
   }
-  if (!project) return <div className="p-6 text-neutral-500">Loading…</div>
+  if (!project || !stored) return <div className="p-6 text-neutral-500">Loading…</div>
 
   const currentIdx = Math.max(0, STEPS.findIndex((s) => location.pathname.endsWith(`/${s.path}`)))
   const prev = STEPS[currentIdx - 1]
   const next = STEPS[currentIdx + 1]
+  const showRooms = stored.rooms.length > 1 && ROOM_STEPS.has(STEPS[currentIdx].path)
 
   return (
     <div className="flex h-full flex-col">
@@ -50,6 +70,7 @@ export default function ProjectLayout() {
           </button>
           <div className="min-w-0 flex-1 text-center">
             <div className="truncate text-lg font-bold">{project.customer.name || 'New consultation'}</div>
+            {stored.rooms.length === 1 && <div className="text-sm text-neutral-500">{project.roomName}</div>}
           </div>
           <SaveIndicator state={saveState} />
         </div>
@@ -72,9 +93,26 @@ export default function ProjectLayout() {
         </nav>
       </header>
 
+      {showRooms && (
+        <div className="flex items-center justify-center gap-2 border-b-2 border-neutral-100 bg-neutral-50 px-4 py-2" role="tablist" aria-label="Room">
+          {stored.rooms.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              role="tab"
+              aria-selected={r.id === activeRoomId}
+              onClick={() => setRoomId(r.id)}
+              className={`min-h-11 min-w-32 rounded-full px-5 font-semibold ${r.id === activeRoomId ? 'bg-black text-white' : 'bg-white text-neutral-700 active:bg-neutral-100'}`}
+            >
+              {r.type === 'kitchen' ? '🍳' : '🛁'} {r.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-6 py-6">
-          <Outlet context={{ project, update } satisfies ProjectContext} />
+          <Outlet context={{ project, update, stored, updateStored, setRoom: setRoomId } satisfies ProjectContext} />
         </div>
       </main>
 

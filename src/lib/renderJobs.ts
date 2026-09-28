@@ -1,9 +1,10 @@
 import type { Selection } from '../config/catalog'
-import type { LookKey, Project, RenderVersion } from '../types'
+import type { LookKey, Project, RenderVersion, StoredProject } from '../types'
 import { getProject, putPhoto, saveProject } from './db'
 import { newId } from './id'
 import { compressImage } from './image'
 import { renderKey } from './looks'
+import { updateRoom } from './project'
 
 /**
  * Background render queue. Jobs keep running if the salesperson switches
@@ -20,6 +21,8 @@ export interface JobState {
 
 export interface RenderRequest {
   projectId: string
+  /** Room the rendering belongs to (kitchen or bath) */
+  roomId: string
   look: LookKey
   /** Kitchen photo being restyled (the source may be that photo or an earlier rendering of it) */
   photoId: string
@@ -36,7 +39,7 @@ export interface RenderRequest {
   accessCode?: string
 }
 
-type Updater = (fn: (p: Project) => Project) => void
+type Updater = (fn: (p: StoredProject) => StoredProject) => void
 
 const jobs = new Map<string, JobState>()
 const listeners = new Set<() => void>()
@@ -90,7 +93,7 @@ export async function startRender(req: RenderRequest): Promise<void> {
       height,
     }
     await putPhoto(req.projectId, version.id, blob)
-    await applyToProject(req.projectId, (p) => ({
+    await applyToProject(req.projectId, req.roomId, (p) => ({
       ...p,
       renders: [...p.renders, version],
       activeRender: { ...p.activeRender, [renderKey(req.look, req.photoId)]: version.id },
@@ -107,11 +110,12 @@ export async function startRender(req: RenderRequest): Promise<void> {
   emit()
 }
 
-async function applyToProject(projectId: string, fn: (p: Project) => Project) {
+/** Save into the right room, even if the salesperson has switched rooms or left the consultation. */
+async function applyToProject(projectId: string, roomId: string, fn: (p: Project) => Project) {
   const live = updaters.get(projectId)
-  if (live) return live(fn)
-  const p = await getProject(projectId)
-  if (p) await saveProject({ ...fn(p), updatedAt: Date.now() })
+  if (live) return live((s) => updateRoom(s, roomId, fn))
+  const s = await getProject(projectId)
+  if (s) await saveProject({ ...updateRoom(s, roomId, fn), updatedAt: Date.now() })
 }
 
 const TIMEOUT_MS = 120_000

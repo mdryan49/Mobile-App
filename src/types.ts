@@ -88,15 +88,37 @@ export interface RenderVersion {
   height: number
 }
 
-export interface Project {
+export type RoomType = 'kitchen' | 'bath'
+
+export type BathDemoScope = 'full-gut' | 'partial'
+
+/** Full bath remodel measurements. */
+export interface BathMeasurements {
+  floorSqft: number
+  vanityWidthIn: number
+  /** Tiled shower/tub walls */
+  showerTileSqft: number
+  showerTileManual: boolean
+  paintSqft: number
+  demoScope: BathDemoScope
+  movePlumbing: boolean
+  electricalUpdates: boolean
+  exhaustFan: boolean
+  heatedFloor: boolean
+  permits: boolean
+}
+
+/** Everything that belongs to one room of a consultation. */
+export interface RoomData {
   id: string
-  createdAt: number
-  updatedAt: number
-  isDemo?: boolean
-  customer: Customer
+  type: RoomType
+  name: string
   photos: PhotoRef[]
   heroPhotoId: string | null
+  /** Kitchen measurements (used when type is 'kitchen') */
   measurements: Measurements
+  /** Bath measurements (used when type is 'bath') */
+  bath: BathMeasurements
   /** Up to 3 design options built from supplier products */
   designs: Design[]
   /** Walls to remove, marked on photos */
@@ -106,10 +128,30 @@ export interface Project {
   activeRender: Record<string, string>
   /** Design option the salesperson recommends; featured first on the proposal */
   recommended: LookKey | null
+  /** Ask the AI to tidy clutter in renderings */
+  declutter: boolean
+}
+
+/** What's saved on the iPad: one consultation with one or more rooms. */
+export interface StoredProject {
+  id: string
+  createdAt: number
+  updatedAt: number
+  isDemo?: boolean
+  customer: Customer
   /** Set the first time a proposal PDF is created */
   proposal: { number: string; createdAt: number } | null
-  /** Ask the AI to tidy countertop clutter in renderings */
-  declutter: boolean
+  rooms: RoomData[]
+}
+
+/**
+ * The consultation as seen from one room. Step screens work with this, so they
+ * don't need to know about rooms (see scopeToRoom in lib/project.ts).
+ */
+export interface Project extends Omit<StoredProject, 'rooms'>, Omit<RoomData, 'id' | 'type' | 'name'> {
+  roomId: string
+  roomType: RoomType
+  roomName: string
 }
 
 export interface StoredPhoto {

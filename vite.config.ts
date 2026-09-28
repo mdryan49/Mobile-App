@@ -12,9 +12,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/*.png', 'icons/*.svg', 'demo/*'],
       manifest: {
-        name: `${BRAND.name} Kitchen Consult`,
+        name: `${BRAND.name} Remodel Consult`,
         short_name: BRAND.shortName,
-        description: `${BRAND.name} in-home kitchen remodel consultations`,
+        description: `${BRAND.name} in-home kitchen & bath remodel consultations`,
         theme_color: BRAND.colors.accent,
         background_color: '#ffffff',
         display: 'standalone',

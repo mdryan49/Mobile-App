@@ -11,10 +11,16 @@ import {
   COUNTERTOPS,
   DOOR_STYLES,
   FAUCET_FINISH_IDS,
+  BATH_FIXTURE_FINISH_IDS,
+  BATH_LIGHTING,
   FLOORING,
   HARDWARE_FINISH_IDS,
-  isAvailable,
   LIGHTING,
+  offeredIn,
+  SHOWER_GLASS,
+  SHOWER_SYSTEMS,
+  TOILETS,
+  VANITIES,
   METAL_FINISHES,
   PAINT_COLORS,
   SINK_FAUCETS,
@@ -24,7 +30,7 @@ import {
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { useRenderJobs } from '../hooks/useRenderJobs'
 import { deletePhoto } from '../lib/db'
-import { calculateEstimate, money, moneyRange } from '../lib/estimate'
+import { estimateFor, money, moneyRange } from '../lib/estimate'
 import { activeVersion, lookWalls, rendersFor, withActive } from '../lib/looks'
 import { MAX_DESIGNS, newDesign } from '../lib/project'
 import { CHANGE_LABELS } from '../lib/prompt'
@@ -50,14 +56,18 @@ interface Category {
   options: Option[]
 }
 
+const countertopOption = (c: (typeof COUNTERTOPS)[number]): Option => ({ id: c.id, name: c.name, sub: `${c.brand} ${c.material.toLowerCase()} · ${c.supplier}`, swatch: c.swatch })
+const tileOption = (b: (typeof BACKSPLASHES)[number]): Option => ({ id: b.id, name: b.name, sub: `${b.style} · ${b.supplier}`, swatch: b.swatch })
+const floorOption = (f: (typeof FLOORING)[number]): Option => ({ id: f.id, name: f.name, sub: `${f.brand} · ${f.supplier}`, swatch: f.swatch })
+
 const metal = (ids: string[]): Option[] =>
   METAL_FINISHES.filter((m) => ids.includes(m.id)).map((m) => ({ id: m.id, name: m.name, swatch: m.swatch }))
 
-/** Pickers, in the order a salesperson walks a kitchen. Only products marked available appear. */
-const CATEGORIES: Category[] = [
+/** Kitchen pickers, in the order a salesperson walks a kitchen. Only products available for kitchens appear. */
+const KITCHEN_CATEGORIES: Category[] = [
   {
     field: 'cabinetLineId', label: 'Cabinets', keepLabel: 'Keep existing cabinets', keepHint: 'No new boxes (pick a color to refinish)',
-    options: CABINET_LINES.filter(isAvailable).map((c) => ({ id: c.id, name: `${c.name}`, sub: `${c.description} · ${c.supplier}`, swatch: c.swatch })),
+    options: CABINET_LINES.filter(offeredIn('kitchen')).map((c) => ({ id: c.id, name: `${c.name}`, sub: `${c.description} · ${c.supplier}`, swatch: c.swatch })),
   },
   {
     field: 'doorStyleId', label: 'Door style', keepLabel: 'Keep current style', keepHint: 'Same doors as today',
@@ -69,15 +79,15 @@ const CATEGORIES: Category[] = [
   },
   {
     field: 'countertopId', label: 'Countertop', keepLabel: 'Keep existing', keepHint: 'Current countertops stay',
-    options: COUNTERTOPS.filter(isAvailable).map((c) => ({ id: c.id, name: c.name, sub: `${c.brand} ${c.material.toLowerCase()} · ${c.supplier}`, swatch: c.swatch })),
+    options: COUNTERTOPS.filter(offeredIn('kitchen')).map(countertopOption),
   },
   {
     field: 'backsplashId', label: 'Backsplash', keepLabel: 'Keep existing', keepHint: 'Current backsplash stays',
-    options: BACKSPLASHES.filter(isAvailable).map((b) => ({ id: b.id, name: b.name, sub: `${b.style} · ${b.supplier}`, swatch: b.swatch })),
+    options: BACKSPLASHES.filter(offeredIn('kitchen')).map(tileOption),
   },
   {
     field: 'sinkFaucetId', label: 'Sink & faucet', keepLabel: 'Keep existing', keepHint: 'Current sink & faucet stay',
-    options: SINK_FAUCETS.filter(isAvailable).map((s) => ({ id: s.id, name: `${s.brand} ${s.name}`, sub: `${s.sink} · ${s.supplier}`, swatch: s.swatch })),
+    options: SINK_FAUCETS.filter(offeredIn('kitchen')).map((s) => ({ id: s.id, name: `${s.brand} ${s.name}`, sub: `${s.sink} · ${s.supplier}`, swatch: s.swatch })),
   },
   { field: 'faucetFinishId', label: 'Faucet finish', keepLabel: 'Keep current', keepHint: 'Same finish as today', options: metal(FAUCET_FINISH_IDS) },
   { field: 'hardwareFinishId', label: 'Hardware', keepLabel: 'Keep existing', keepHint: 'Current pulls stay', options: metal(HARDWARE_FINISH_IDS) },
@@ -87,11 +97,61 @@ const CATEGORIES: Category[] = [
   },
   {
     field: 'flooringId', label: 'Flooring', keepLabel: 'Keep existing', keepHint: 'Current floor stays',
-    options: FLOORING.filter(isAvailable).map((f) => ({ id: f.id, name: f.name, sub: `${f.brand} · ${f.supplier}`, swatch: f.swatch })),
+    options: FLOORING.filter(offeredIn('kitchen')).map(floorOption),
   },
   {
     field: 'lightingId', label: 'Lighting', keepLabel: 'No new lighting', keepHint: 'Current fixtures stay',
-    options: LIGHTING.filter(isAvailable).map((l) => ({ id: l.id, name: l.name, sub: l.description })),
+    options: LIGHTING.filter(offeredIn('kitchen')).map((l) => ({ id: l.id, name: l.name, sub: l.description })),
+  },
+]
+
+/** Bath pickers. Vanity color & door style reuse the cabinet finishes; vanity top reuses countertops; shower walls reuse tile. */
+const BATH_CATEGORIES: Category[] = [
+  {
+    field: 'vanityId', label: 'Vanity', keepLabel: 'Keep existing vanity', keepHint: 'Pick a color to refinish it',
+    options: VANITIES.filter(offeredIn('bath')).map((v) => ({ id: v.id, name: v.name, sub: `${v.mount === 'floating' ? 'Floating' : 'Floor-standing'}, ${v.sinks} sink${v.sinks > 1 ? 's' : ''} · ${v.supplier}` })),
+  },
+  {
+    field: 'cabinetFinishId', label: 'Vanity color', keepLabel: 'Keep current color', keepHint: 'No paint or new color',
+    options: CABINET_FINISHES.map((f) => ({ id: f.id, name: f.name, swatch: f.swatch })),
+  },
+  {
+    field: 'doorStyleId', label: 'Door style', keepLabel: 'Keep current style', keepHint: 'Same doors as today',
+    options: DOOR_STYLES.map((d) => ({ id: d.id, name: d.name, sub: d.description })),
+  },
+  {
+    field: 'countertopId', label: 'Vanity top', keepLabel: 'Keep existing top', keepHint: 'Current top & sink stay',
+    options: COUNTERTOPS.filter(offeredIn('bath')).map(countertopOption),
+  },
+  {
+    field: 'showerId', label: 'Shower / tub', keepLabel: 'Keep existing tub/shower', keepHint: 'Pick a tile to re-tile the walls',
+    options: SHOWER_SYSTEMS.filter(offeredIn('bath')).map((x) => ({ id: x.id, name: x.name, sub: `${x.tiled ? 'Tiled walls' : 'No tile'}${x.glass ? ' · needs glass' : ''} · ${x.supplier}` })),
+  },
+  {
+    field: 'backsplashId', label: 'Shower tile', keepLabel: 'Keep existing tile', keepHint: 'Tiled showers use a tile allowance until picked',
+    options: BACKSPLASHES.filter(offeredIn('bath')).map(tileOption),
+  },
+  {
+    field: 'glassId', label: 'Glass', keepLabel: 'Keep existing / curtain', keepHint: 'No new glass',
+    options: SHOWER_GLASS.filter(offeredIn('bath')).map((g) => ({ id: g.id, name: g.name, sub: g.supplier, swatch: g.swatch })),
+  },
+  {
+    field: 'toiletId', label: 'Toilet', keepLabel: 'Keep existing', keepHint: 'Current toilet stays',
+    options: TOILETS.filter(offeredIn('bath')).map((t) => ({ id: t.id, name: t.name, sub: `${t.brand} · ${t.supplier}` })),
+  },
+  { field: 'faucetFinishId', label: 'Fixture finish', keepLabel: 'Keep existing fixtures', keepHint: 'Faucets & trim stay', options: metal(BATH_FIXTURE_FINISH_IDS) },
+  { field: 'hardwareFinishId', label: 'Hardware', keepLabel: 'Keep existing', keepHint: 'Current pulls stay', options: metal(HARDWARE_FINISH_IDS) },
+  {
+    field: 'paintId', label: 'Wall paint', keepLabel: 'No painting', keepHint: 'Walls stay as they are',
+    options: PAINT_COLORS.map((p) => ({ id: p.id, name: p.name, sub: `${p.brand} ${p.code}`, swatch: p.swatch })),
+  },
+  {
+    field: 'flooringId', label: 'Flooring', keepLabel: 'Keep existing', keepHint: 'Current floor stays',
+    options: FLOORING.filter(offeredIn('bath')).map(floorOption),
+  },
+  {
+    field: 'bathLightId', label: 'Mirror & lighting', keepLabel: 'Keep existing', keepHint: 'Current mirror & lights stay',
+    options: BATH_LIGHTING.filter(offeredIn('bath')).map((l) => ({ id: l.id, name: l.name, sub: l.supplier })),
   },
 ]
 
@@ -195,7 +255,7 @@ function DesignEditor({
   const m = project.measurements
   const pricing = settings.pricing
   const walls = lookWalls(project, design.id)
-  const est = calculateEstimate(m, sel, pricing, walls)
+  const est = estimateFor(project, sel, pricing, walls)
 
   const hero = project.photos.find((p) => p.id === project.heroPhotoId)
   const heroUrl = usePhotoUrl(hero?.id)
@@ -203,20 +263,21 @@ function DesignEditor({
   const activeUrl = usePhotoUrl(active?.id)
   const job = hero ? jobs.get(jobKey(project.id, design.id, hero.id)) : undefined
   const plan = hero ? planRender(project, design.id, hero.id) : null
-  const cat = CATEGORIES[catIdx]
+  const categories = project.roomType === 'bath' ? BATH_CATEGORIES : KITCHEN_CATEGORIES
+  const cat = categories[Math.min(catIdx, categories.length - 1)]
 
   // Price difference of every choice vs. the current one, so you can say "that's +$1,200"
   const deltas = useMemo(() => {
     const out = new Map<string | null, number>()
     for (const id of [null, ...cat.options.map((o) => o.id)]) {
-      out.set(id, calculateEstimate(m, { ...sel, [cat.field]: id }, pricing, walls).total - est.total)
+      out.set(id, estimateFor(project, { ...sel, [cat.field]: id }, pricing, walls).total - est.total)
     }
     return out
   }, [cat, m, sel, pricing, walls, est.total])
 
   const patch = (p: Partial<Design>) => update((pr) => ({ ...pr, designs: pr.designs.map((d) => (d.id === design.id ? { ...d, ...p } : d)) }))
   const choose = (field: keyof Selection, id: string | null) => patch({ selection: { ...sel, [field]: id } })
-  const chosenCount = (Object.values(sel) as (string | null)[]).filter(Boolean).length
+  const chosenCount = categories.filter((c) => sel[c.field]).length
 
   async function render(fresh = false) {
     if (!hero) return
@@ -235,7 +296,7 @@ function DesignEditor({
         <div className="text-right">
           <div className="text-3xl font-bold text-accent tabular-nums">{est.empty ? '-' : moneyRange(est.low, est.high)}</div>
           <div className="text-sm text-neutral-600">
-            {chosenCount} of {CATEGORIES.length} categories chosen
+            {chosenCount} of {categories.length} categories chosen
           </div>
         </div>
       </div>
@@ -280,7 +341,7 @@ function DesignEditor({
               {heroUrl && <img src={heroUrl} alt="Kitchen before" className="block w-full" />}
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/70 p-6 text-center">
                 {plan?.nothingChosen ? (
-                  <p className="max-w-sm text-lg font-semibold">Pick products on the right, then render this option in their kitchen.</p>
+                  <p className="max-w-sm text-lg font-semibold">Pick products on the right, then render this option in their {project.roomType === 'bath' ? 'bathroom' : 'kitchen'}.</p>
                 ) : (
                   <Button onClick={() => render(true)}>✨ Render this option</Button>
                 )}
@@ -306,7 +367,7 @@ function DesignEditor({
               versions={rendersFor(project, design.id, hero.id)}
               activeId={active?.id}
               priceFor={(v) => {
-                const e = calculateEstimate(m, v.selection, pricing, v.wallsRemoved ? project.walls : [])
+                const e = estimateFor(project, v.selection, pricing, v.wallsRemoved ? project.walls : [])
                 return moneyRange(e.low, e.high)
               }}
               onSelect={(v) =>
@@ -327,7 +388,7 @@ function DesignEditor({
 
         <div className="min-w-0 rounded-2xl border-2 border-neutral-100">
           <div className="flex gap-2 overflow-x-auto border-b-2 border-neutral-100 p-3">
-            {CATEGORIES.map((c, i) => (
+            {categories.map((c, i) => (
               <button
                 key={c.field}
                 type="button"

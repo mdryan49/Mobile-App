@@ -22,10 +22,11 @@ export function planRender(p: Project, look: string, photoId: string): RenderPla
   if (!design) return { pending: [], canEdit: false, nothingChosen: true }
   const walls = wallsOnPhoto(p, look, photoId)
   const active = activeVersion(p, look, photoId)
-  const pending = active ? pendingChanges(active.selection, design.selection, !!active.wallsRemoved, walls.length > 0) : []
+  const room = p.roomType
+  const pending = active ? pendingChanges(active.selection, design.selection, !!active.wallsRemoved, walls.length > 0, room) : []
   // Walls and "back to keep existing" can't be edited onto a rendering; they need the original photo
-  const canEdit = pending.length > 0 && pending.every((c) => c !== 'walls' && changeIsAddition(design.selection, c))
-  return { pending, canEdit, nothingChosen: !hasChanges(design.selection, walls) }
+  const canEdit = pending.length > 0 && pending.every((c) => c !== 'walls' && changeIsAddition(design.selection, c, room))
+  return { pending, canEdit, nothingChosen: !hasChanges(design.selection, walls, room) }
 }
 
 /**
@@ -41,6 +42,7 @@ export async function renderDesign(p: Project, look: string, photo: PhotoRef, op
   const active = activeVersion(p, look, photo.id)
   const common = {
     projectId: p.id,
+    roomId: p.roomId,
     look,
     photoId: photo.id,
     aspectRatio: nearestAspectRatio(photo.width, photo.height),
@@ -55,7 +57,7 @@ export async function renderDesign(p: Project, look: string, photo: PhotoRef, op
       void startRender({
         ...common,
         source,
-        prompt: changesPrompt(design.selection, plan.pending, walls),
+        prompt: changesPrompt(design.selection, plan.pending, walls, p.roomType),
         label: plan.pending.map((c) => CHANGE_LABELS[c]).join(' + '),
         parentId: active.id,
       })
@@ -69,7 +71,7 @@ export async function renderDesign(p: Project, look: string, photo: PhotoRef, op
     ...common,
     source,
     references: walls.length ? [await annotateWalls(source, walls)] : undefined,
-    prompt: fullRenderPrompt(design.selection, p.declutter, walls),
+    prompt: fullRenderPrompt(design.selection, p.declutter, walls, p.roomType),
     label: rendersFor(p, look, photo.id).length ? 'Fresh render' : 'Initial render',
   })
   return null

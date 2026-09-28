@@ -42,7 +42,7 @@ export default function RenderingsStep() {
       <section>
         <h1 className="text-3xl font-bold">Renderings</h1>
         <div className="mt-6 rounded-2xl border-2 border-dashed border-neutral-200 px-6 py-16 text-center">
-          <p className="text-lg text-neutral-600">Add kitchen photos and pick a hero photo first.</p>
+          <p className="text-lg text-neutral-600">Add {project.roomName.toLowerCase()} photos and pick a hero photo first.</p>
           <Button className="mt-4" onClick={() => navigate('../photos', { relative: 'path', replace: true })}>
             Go to photos
           </Button>
@@ -122,7 +122,7 @@ export default function RenderingsStep() {
                 ) : (
                   <>
                     <p className="text-xl font-semibold">
-                      See {isHero ? 'their kitchen' : 'this view'} as {lookName(project, current)}
+                      See {isHero ? `their ${project.roomType === 'bath' ? 'bathroom' : 'kitchen'}` : 'this view'} as {lookName(project, current)}
                     </p>
                     <Button onClick={() => render(current)}>✨ Render this option</Button>
                   </>
@@ -159,7 +159,7 @@ export default function RenderingsStep() {
         <aside className="space-y-5">
           <div className="rounded-2xl border-2 border-neutral-100 p-5">
             <h2 className="mb-4 text-lg font-bold">{lookName(project, current)}</h2>
-            <LookMaterials selection={selection} />
+            <LookMaterials selection={selection} room={project.roomType} />
           </div>
           {wallsHere.length > 0 && (
             <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">

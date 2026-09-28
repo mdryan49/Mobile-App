@@ -1,4 +1,8 @@
-import { Field, TextArea, TextInput } from '../components/ui'
+import { useState } from 'react'
+import { ConfirmDialog, Field, TextArea, TextInput } from '../components/ui'
+import { deletePhoto } from '../lib/db'
+import { newRoom, ROOM_LABELS } from '../lib/project'
+import type { RoomType } from '../types'
 import type { Customer } from '../types'
 import { useProjectContext } from './ProjectLayout'
 
@@ -38,11 +42,69 @@ export default function CustomerStep() {
           />
         </Field>
         <div className="md:col-span-2">
+          <RoomsPicker />
+        </div>
+        <div className="md:col-span-2">
           <Field label="Notes">
             <TextArea value={c.notes} onChange={set('notes')} placeholder="Goals, must-haves, budget, timeline, how they use the kitchen…" />
           </Field>
         </div>
       </div>
     </section>
+  )
+}
+
+/** Kitchen, bath or both. Removing a room that has work in it asks first. */
+function RoomsPicker() {
+  const { stored, updateStored } = useProjectContext()
+  const [confirmRemove, setConfirmRemove] = useState<RoomType | null>(null)
+  const has = (t: RoomType) => stored.rooms.some((r) => r.type === t)
+
+  function toggle(t: RoomType) {
+    if (!has(t)) return updateStored((s) => ({ ...s, rooms: [...s.rooms, newRoom(t)].sort((a, b) => (a.type === 'kitchen' ? -1 : b.type === 'kitchen' ? 1 : 0)) }))
+    if (stored.rooms.length === 1) return // a consultation needs at least one room
+    const room = stored.rooms.find((r) => r.type === t)!
+    if (room.photos.length || room.renders.length) setConfirmRemove(t)
+    else remove(t)
+  }
+
+  async function remove(t: RoomType) {
+    setConfirmRemove(null)
+    const room = stored.rooms.find((r) => r.type === t)
+    updateStored((s) => ({ ...s, rooms: s.rooms.filter((r) => r.type !== t) }))
+    if (room) await Promise.all([...room.photos.map((p) => p.id), ...room.renders.map((r) => r.id)].map(deletePhoto))
+  }
+
+  return (
+    <div>
+      <span className="mb-1.5 block text-sm font-semibold tracking-wide text-neutral-600 uppercase">Remodeling</span>
+      <div className="flex flex-wrap gap-3">
+        {(['kitchen', 'bath'] as RoomType[]).map((t) => {
+          const on = has(t)
+          return (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={on}
+              onClick={() => toggle(t)}
+              disabled={on && stored.rooms.length === 1}
+              className={`flex min-h-14 min-w-40 items-center gap-3 rounded-xl border-2 px-4 text-lg font-semibold ${on ? 'border-accent bg-accent/5 text-accent' : 'border-neutral-200 text-neutral-600'} disabled:opacity-100`}
+            >
+              <span className={`flex h-6 w-6 items-center justify-center rounded border-2 text-sm ${on ? 'border-accent bg-accent text-white' : 'border-neutral-300'}`}>{on ? '✓' : ''}</span>
+              {t === 'kitchen' ? '🍳' : '🛁'} {ROOM_LABELS[t]}
+            </button>
+          )
+        })}
+      </div>
+      <ConfirmDialog
+        open={!!confirmRemove}
+        title={`Remove the ${confirmRemove ? ROOM_LABELS[confirmRemove].toLowerCase() : ''}?`}
+        message="Its photos, design options and renderings will be deleted from this consultation."
+        confirmLabel="Remove"
+        danger
+        onConfirm={() => confirmRemove && remove(confirmRemove)}
+        onCancel={() => setConfirmRemove(null)}
+      />
+    </div>
   )
 }

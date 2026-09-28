@@ -60,7 +60,7 @@ export default function PhotosStep() {
     <section>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Kitchen photos</h1>
+          <h1 className="text-3xl font-bold">{project.roomName} photos</h1>
           <p className="mt-1 text-neutral-600">
             Take {MIN_PHOTOS}–{MAX_PHOTOS} photos. Tap <strong>Make hero</strong> on the best straight-on shot. That one is
             used for the AI renderings.

@@ -5,10 +5,10 @@ import { useNavigate } from 'react-router-dom'
 import { Swatch } from '../components/Swatch'
 import { Button, SamplePricingBadge } from '../components/ui'
 import type { Selection } from '../config/catalog'
-import { availableLooks, lookName, lookSelection, lookWalls } from '../lib/looks'
+import { availableLooks, hasMeasurements, lookName, lookSelection, lookWalls } from '../lib/looks'
 import { materialRows } from '../lib/materials'
-import type { LookKey } from '../types'
-import { calculateEstimate, groupEstimate, GROUPS, LINE_LABELS, money, moneyRange, type Estimate, type EstimateGroup, type GroupKey, type LineKey } from '../lib/estimate'
+import type { LookKey, RoomType } from '../types'
+import { estimateFor, groupEstimate, groupsFor, LINE_LABELS, money, moneyRange, type Estimate, type EstimateGroup, type GroupKey, type LineKey } from '../lib/estimate'
 import { useSettings } from '../lib/settings'
 import { useProjectContext } from './ProjectLayout'
 
@@ -25,17 +25,17 @@ export default function EstimateStep() {
   const estimates = useMemo(
     () =>
       Object.fromEntries(
-        availableLooks(project).map((l) => [l, calculateEstimate(m, lookSelection(project, l), settings.pricing, lookWalls(project, l))]),
+        availableLooks(project).map((l) => [l, estimateFor(project, lookSelection(project, l), settings.pricing, lookWalls(project, l))]),
       ) as Record<LookKey, Estimate>,
     [project, m, settings.pricing],
   )
 
-  if (m.baseCabinetLf <= 0) {
+  if (!hasMeasurements(project)) {
     return (
       <section>
         <h1 className="text-3xl font-bold">Estimate</h1>
         <div className="mt-6 rounded-2xl border-2 border-dashed border-neutral-200 px-6 py-16 text-center">
-          <p className="text-lg text-neutral-600">Enter the cabinet measurements to see pricing.</p>
+          <p className="text-lg text-neutral-600">Enter the measurements to see pricing.</p>
           <Button className="mt-4" onClick={() => navigate('../scope', { relative: 'path', replace: true })}>
             Go to measurements
           </Button>
@@ -48,14 +48,14 @@ export default function EstimateStep() {
   // Every line/category that appears in any option, in standard order
   const lineKeys = (Object.keys(LINE_LABELS) as LineKey[]).filter((k) => looks.some((t) => estimates[t].lines.some((l) => l.key === k)))
   const amountOf = (t: LookKey, k: LineKey) => estimates[t].lines.find((l) => l.key === k)
-  const groups = Object.fromEntries(looks.map((t) => [t, groupEstimate(estimates[t], lookSelection(project, t))])) as Record<LookKey, EstimateGroup[]>
-  const groupKeys = GROUPS.map((g) => g.key).filter((k) => looks.some((t) => groups[t].some((g) => g.key === k)))
+  const groups = Object.fromEntries(looks.map((t) => [t, groupEstimate(estimates[t], lookSelection(project, t), project.roomType)])) as Record<LookKey, EstimateGroup[]>
+  const groupKeys = groupsFor(project.roomType).map((g) => g.key).filter((k) => looks.some((t) => groups[t].some((g) => g.key === k)))
   const highlight = (t: LookKey) => (t === project.recommended ? 'bg-accent/5' : '')
   const groupOf = (t: LookKey, k: GroupKey) => groups[t].find((g) => g.key === k)
 
   const rows: { key: string; label: string; cell: (t: LookKey) => { amount: number; detail: string } | undefined }[] = detailed
     ? lineKeys.map((k) => ({ key: k, label: LINE_LABELS[k], cell: (t) => amountOf(t, k) }))
-    : groupKeys.map((k) => ({ key: k, label: GROUPS.find((g) => g.key === k)!.label, cell: (t) => groupOf(t, k) }))
+    : groupKeys.map((k) => ({ key: k, label: groupsFor(project.roomType).find((g) => g.key === k)!.label, cell: (t) => groupOf(t, k) }))
 
   function toggleStaff() {
     if (staffView) setStaffView(false)
@@ -103,6 +103,7 @@ export default function EstimateStep() {
                     recommended={t === project.recommended}
                     estimate={estimates[t]}
                     selection={lookSelection(project, t)}
+                    room={project.roomType}
                     onEdit={() => navigate('../design', { relative: 'path', replace: true })}
                   />
                 </th>
@@ -160,15 +161,17 @@ function OptionHeader({
   recommended,
   estimate,
   selection,
+  room,
   onEdit,
 }: {
+  room: RoomType
   name: string
   recommended: boolean
   estimate: Estimate
   selection: Selection
   onEdit: () => void
 }) {
-  const chosen = materialRows(selection, { hideKept: true })
+  const chosen = materialRows(selection, { hideKept: true, room })
   return (
     <div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

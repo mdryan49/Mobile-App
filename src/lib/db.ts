@@ -1,10 +1,10 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { Project, StoredPhoto } from '../types'
+import type { StoredPhoto, StoredProject } from '../types'
 import { newId } from './id'
 import { normalizeProject } from './project'
 
 interface ConsultDB extends DBSchema {
-  projects: { key: string; value: Project; indexes: { updatedAt: number } }
+  projects: { key: string; value: StoredProject; indexes: { updatedAt: number } }
   photos: { key: string; value: StoredPhoto; indexes: { projectId: string } }
   settings: { key: string; value: unknown }
 }
@@ -38,17 +38,17 @@ export async function requestPersistentStorage(): Promise<boolean> {
 
 // ---------- Projects ----------
 
-export async function listProjects(): Promise<Project[]> {
+export async function listProjects(): Promise<StoredProject[]> {
   const all = (await (await db()).getAll('projects')).map(normalizeProject)
   return all.sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
-export async function getProject(id: string): Promise<Project | undefined> {
+export async function getProject(id: string): Promise<StoredProject | undefined> {
   const p = await (await db()).get('projects', id)
   return p && normalizeProject(p)
 }
 
-export async function saveProject(p: Project): Promise<void> {
+export async function saveProject(p: StoredProject): Promise<void> {
   await (await db()).put('projects', p)
 }
 
@@ -64,13 +64,13 @@ export async function deleteProject(id: string): Promise<void> {
 }
 
 /** Deep copy of a project, including its photo blobs, under new IDs. */
-export async function duplicateProject(id: string): Promise<Project | undefined> {
+export async function duplicateProject(id: string): Promise<StoredProject | undefined> {
   const d = await db()
   const raw = await d.get('projects', id)
   if (!raw) return undefined
   const src = normalizeProject(raw)
   const now = Date.now()
-  const copy: Project = structuredClone(src)
+  const copy: StoredProject = structuredClone(src)
   copy.id = newId()
   copy.createdAt = now
   copy.updatedAt = now
@@ -83,21 +83,21 @@ export async function duplicateProject(id: string): Promise<Project | undefined>
     if (!idMap.has(id)) idMap.set(id, newId())
     return idMap.get(id)!
   }
-  copy.photos = src.photos.map((ph) => ({ ...ph, id: remap(ph.id) }))
-  copy.heroPhotoId = src.heroPhotoId ? remap(src.heroPhotoId) : null
-  copy.renders = src.renders.map((r) => ({
-    ...r,
-    id: remap(r.id),
-    sourcePhotoId: remap(r.sourcePhotoId),
-    parentId: r.parentId && remap(r.parentId),
+  // Every photo and rendering blob gets a new id; references follow
+  copy.rooms = src.rooms.map((room) => ({
+    ...room,
+    id: newId(),
+    photos: room.photos.map((ph) => ({ ...ph, id: remap(ph.id) })),
+    heroPhotoId: room.heroPhotoId ? remap(room.heroPhotoId) : null,
+    renders: room.renders.map((r) => ({ ...r, id: remap(r.id), sourcePhotoId: remap(r.sourcePhotoId), parentId: r.parentId && remap(r.parentId) })),
+    walls: room.walls.map((w) => ({ ...w, id: newId(), photoId: remap(w.photoId) })),
+    activeRender: Object.fromEntries(
+      Object.entries(room.activeRender).map(([k, v]) => {
+        const [look, photoId] = k.split('@')
+        return [`${look}@${remap(photoId)}`, remap(v)]
+      }),
+    ),
   }))
-  copy.walls = src.walls.map((w) => ({ ...w, id: newId(), photoId: remap(w.photoId) }))
-  copy.activeRender = Object.fromEntries(
-    Object.entries(src.activeRender).map(([k, v]) => {
-      const [look, photoId] = k.split('@')
-      return [`${look}@${remap(photoId)}`, remap(v)]
-    }),
-  )
 
   const tx = d.transaction(['projects', 'photos'], 'readwrite')
   for (const [oldId, nid] of idMap) {

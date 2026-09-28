@@ -40,6 +40,21 @@ export interface PricingSettings {
   /** Load-bearing wall: base (engineer, permit, temporary shoring) + per linear foot (beam, posts) */
   wallLoadBearingBase: number
   wallLoadBearingPerLf: number
+
+  // ----- Bath -----
+  bathDemoFullGut: number
+  bathDemoPartial: number
+  /** Rough-in: supply & drain lines, valve for a full bath */
+  bathPlumbingRoughIn: number
+  vanityInstall: number
+  toiletInstall: number
+  /** Waterproofing membrane on tiled shower walls & pan */
+  showerWaterproofPerSqft: number
+  /** Faucets, shower valve trim & accessories (plus finish upcharge) */
+  bathFixtureTrim: number
+  glassInstall: number
+  exhaustFan: number
+  heatedFloorPerSqft: number
 }
 
 export interface Salesperson {
@@ -90,5 +105,16 @@ export const DEFAULT_SETTINGS: AppSettings = {
     wallNonBearingPerLf: 120,
     wallLoadBearingBase: 6500,
     wallLoadBearingPerLf: 450,
+
+    bathDemoFullGut: 3500,
+    bathDemoPartial: 1600,
+    bathPlumbingRoughIn: 2400,
+    vanityInstall: 450,
+    toiletInstall: 350,
+    showerWaterproofPerSqft: 12,
+    bathFixtureTrim: 850,
+    glassInstall: 400,
+    exhaustFan: 650,
+    heatedFloorPerSqft: 22,
   },
 }

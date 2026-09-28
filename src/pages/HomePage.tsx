@@ -3,16 +3,16 @@ import { Link, useNavigate } from 'react-router-dom'
 import { BRAND } from '../config/brand'
 import { Button, ConfirmDialog, Logo, TextInput } from '../components/ui'
 import { deleteProject, duplicateProject, listProjects, saveProject } from '../lib/db'
-import { emptyProject } from '../lib/project'
+import { emptyProject, ROOM_LABELS } from '../lib/project'
 import { createDemoProject } from '../lib/demo'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
-import type { Project } from '../types'
+import type { RoomType, StoredProject } from '../types'
 
 export default function HomePage() {
   const navigate = useNavigate()
-  const [projects, setProjects] = useState<Project[] | null>(null)
+  const [projects, setProjects] = useState<StoredProject[] | null>(null)
   const [query, setQuery] = useState('')
-  const [toDelete, setToDelete] = useState<Project | null>(null)
+  const [toDelete, setToDelete] = useState<StoredProject | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -27,8 +27,10 @@ export default function HomePage() {
     return q ? projects.filter((p) => p.customer.name.toLowerCase().includes(q)) : projects
   }, [projects, query])
 
-  async function newConsultation() {
-    const p = emptyProject()
+  const [choosingType, setChoosingType] = useState(false)
+
+  async function newConsultation(types: RoomType[]) {
+    const p = emptyProject(types)
     await saveProject(p)
     navigate(`/project/${p.id}/customer`)
   }
@@ -77,7 +79,7 @@ export default function HomePage() {
           <Button variant="secondary" onClick={loadDemo} disabled={busy === 'demo'}>
             {busy === 'demo' ? 'Loading…' : 'Demo mode'}
           </Button>
-          <Button onClick={newConsultation}>+ New consultation</Button>
+          <Button onClick={() => setChoosingType(true)}>+ New consultation</Button>
         </div>
       </header>
 
@@ -95,7 +97,7 @@ export default function HomePage() {
         {projects === null ? (
           <p className="text-neutral-500">Loading…</p>
         ) : filtered.length === 0 ? (
-          <EmptyState hasAny={projects.length > 0} onNew={newConsultation} onDemo={loadDemo} />
+          <EmptyState hasAny={projects.length > 0} onNew={() => setChoosingType(true)} onDemo={loadDemo} />
         ) : (
           <ul className="grid gap-4 md:grid-cols-2">
             {filtered.map((p) => (
@@ -110,6 +112,8 @@ export default function HomePage() {
           </ul>
         )}
       </div>
+
+      {choosingType && <ProjectTypeDialog onChoose={newConsultation} onCancel={() => setChoosingType(false)} />}
 
       <ConfirmDialog
         open={!!toDelete}
@@ -130,12 +134,14 @@ function ProjectCard({
   onDuplicate,
   onDelete,
 }: {
-  project: Project
+  project: StoredProject
   busy: boolean
   onDuplicate: () => void
   onDelete: () => void
 }) {
-  const thumb = usePhotoUrl(project.heroPhotoId ?? project.photos[0]?.id)
+  const room = project.rooms.find((r) => r.photos.length) ?? project.rooms[0]
+  const thumb = usePhotoUrl(room?.heroPhotoId ?? room?.photos[0]?.id)
+  const photoCount = project.rooms.reduce((n, r) => n + r.photos.length, 0)
   const date = new Date(project.updatedAt).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -156,7 +162,7 @@ function ProjectCard({
           </div>
           <p className="truncate text-neutral-600">{project.customer.address || 'No address yet'}</p>
           <p className="mt-1 text-sm text-neutral-500">
-            {project.photos.length} photo{project.photos.length === 1 ? '' : 's'} · Updated {date}
+            {project.rooms.map((r) => ROOM_LABELS[r.type]).join(' + ')} · {photoCount} photo{photoCount === 1 ? '' : 's'} · Updated {date}
           </p>
         </div>
       </Link>
@@ -183,6 +189,41 @@ function EmptyState({ hasAny, onNew, onDemo }: { hasAny: boolean; onNew: () => v
           Load demo
         </Button>
         <Button onClick={onNew}>+ New consultation</Button>
+      </div>
+    </div>
+  )
+}
+
+const PROJECT_TYPES: { types: RoomType[]; label: string; icon: string }[] = [
+  { types: ['kitchen'], label: 'Kitchen', icon: '🍳' },
+  { types: ['bath'], label: 'Bath', icon: '🛁' },
+  { types: ['kitchen', 'bath'], label: 'Both', icon: '🍳🛁' },
+]
+
+function ProjectTypeDialog({ onChoose, onCancel }: { onChoose: (types: RoomType[]) => void; onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={onCancel}>
+      <div role="dialog" aria-modal="true" aria-label="New consultation" className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-2xl font-bold">What are we remodeling?</h2>
+        <p className="mt-1 text-neutral-600">You can add or remove a room later on the Customer step.</p>
+        <div className="mt-5 grid grid-cols-3 gap-3">
+          {PROJECT_TYPES.map((t) => (
+            <button
+              key={t.label}
+              type="button"
+              onClick={() => onChoose(t.types)}
+              className="flex min-h-28 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-neutral-200 text-lg font-bold active:border-accent active:bg-accent/5"
+            >
+              <span className="text-3xl">{t.icon}</span>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-5 text-right">
+          <Button variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
       </div>
     </div>
   )

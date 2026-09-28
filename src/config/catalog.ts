@@ -20,7 +20,13 @@ export const SUPPLIERS = {
   paint: 'Paint store',
   flooring: 'Flooring supplier',
   lighting: 'Lighting & electrical supplier',
+  vanities: 'Vanity supplier',
+  bathFixtures: 'Plumbing supplier (bath)',
+  glass: 'Shower glass fabricator',
 } as const
+
+/** Which rooms a product is offered in (omit = all rooms). */
+export type CatalogRoom = 'kitchen' | 'bath'
 
 export type SwatchPattern = 'solid' | 'speckle' | 'veined' | 'wood' | 'tile' | 'metal'
 export interface Swatch {
@@ -36,6 +42,8 @@ interface BaseItem {
   supplier: string
   /** false hides it from the pickers (backordered, discontinued...) */
   available?: boolean
+  /** Rooms this product is offered in; omit for every room */
+  rooms?: CatalogRoom[]
   swatch: Swatch
 }
 
@@ -215,6 +223,7 @@ export const METAL_FINISHES: MetalFinish[] = [
 export const FAUCET_FINISH_UPCHARGE: Record<string, number> = {
   chrome: 0,
   stainless: 0,
+  nickel: 60,
   black: 90,
   brass: 180,
 }
@@ -263,7 +272,9 @@ export interface Flooring extends BaseItem {
 export const FLOORING: Flooring[] = [
   { id: 'fl-lvp-oak', name: 'Natural Oak LVP', brand: 'Luxury vinyl plank', supplier: SUPPLIERS.flooring, unit: 'sqft', installedCostPerSqft: 7, swatch: { color: '#c9a77c', accent: '#a8845a', pattern: 'wood' }, promptText: 'natural light oak luxury vinyl plank flooring' },
   { id: 'fl-lvp-walnut', name: 'Smoked Walnut LVP', brand: 'Luxury vinyl plank', supplier: SUPPLIERS.flooring, unit: 'sqft', installedCostPerSqft: 7.5, swatch: { color: '#6b4b34', accent: '#523624', pattern: 'wood' }, promptText: 'warm dark walnut luxury vinyl plank flooring' },
-  { id: 'fl-eng-white-oak', name: 'White Oak Engineered', brand: 'Engineered hardwood', supplier: SUPPLIERS.flooring, unit: 'sqft', installedCostPerSqft: 12, swatch: { color: '#d2b48c', accent: '#b8966a', pattern: 'wood' }, promptText: 'wide-plank white oak engineered hardwood flooring, matte finish' },
+  { id: 'fl-eng-white-oak', name: 'White Oak Engineered', brand: 'Engineered hardwood', supplier: SUPPLIERS.flooring, rooms: ['kitchen'], unit: 'sqft', installedCostPerSqft: 12, swatch: { color: '#d2b48c', accent: '#b8966a', pattern: 'wood' }, promptText: 'wide-plank white oak engineered hardwood flooring, matte finish' },
+  { id: 'fl-hex-marble', name: 'Marble-look Hex Mosaic', brand: 'Arizona Tile', supplier: SUPPLIERS.tile, rooms: ['bath'], unit: 'sqft', installedCostPerSqft: 22, swatch: { color: '#eeece8', accent: '#b9b6b0', pattern: 'tile' }, promptText: 'small white marble-look hexagon mosaic floor tile with gray veining' },
+  { id: 'fl-wood-porc', name: 'Wood-look Porcelain Plank', brand: 'Arizona Tile', supplier: SUPPLIERS.tile, unit: 'sqft', installedCostPerSqft: 13, swatch: { color: '#b89572', accent: '#9a7852', pattern: 'wood' }, promptText: 'warm oak wood-look porcelain plank floor tile' },
   { id: 'fl-porc-stone', name: 'Stone-look Porcelain 12x24', brand: 'Arizona Tile', supplier: SUPPLIERS.tile, unit: 'sqft', installedCostPerSqft: 14, swatch: { color: '#bdb8ae', accent: '#9e998f', pattern: 'tile' }, promptText: 'large 12x24 warm gray stone-look porcelain floor tile' },
 ]
 
@@ -280,6 +291,94 @@ export const LIGHTING: LightingPackage[] = [
   { id: 'lt-recessed-ucl', name: 'Recessed + under-cabinet', brand: 'LED', supplier: SUPPLIERS.lighting, unit: 'pkg', cost: 2200, description: 'Recessed cans plus LED under-cabinet strips', swatch: { color: '#f7e9c7' } },
   { id: 'lt-full', name: 'Full lighting package', brand: 'LED', supplier: SUPPLIERS.lighting, unit: 'pkg', cost: 3800, description: 'Recessed, under-cabinet and 3 island pendants', swatch: { color: '#e9d39c' } },
 ]
+
+// ================= BATH =================
+
+// ---------------- Vanities (color & door style come from CABINET_FINISHES / DOOR_STYLES) ----------------
+
+export interface Vanity extends BaseItem {
+  unit: 'each'
+  widthIn: number
+  sinks: 1 | 2
+  mount: 'floor' | 'floating'
+  cost: number
+  promptText: string
+}
+
+const vanity = (id: string, name: string, widthIn: number, sinks: 1 | 2, mount: 'floor' | 'floating', cost: number): Vanity => ({
+  id, name, brand: 'Diamond Bath', supplier: SUPPLIERS.vanities, rooms: ['bath'], unit: 'each', widthIn, sinks, mount, cost,
+  swatch: { color: '#e8e4dc' },
+  promptText: `a ${widthIn}-inch ${mount === 'floating' ? 'wall-hung floating' : 'floor-standing'} ${sinks === 2 ? 'double-sink ' : ''}bathroom vanity`,
+})
+
+export const VANITIES: Vanity[] = [
+  vanity('van-30', '30" vanity', 30, 1, 'floor', 650),
+  vanity('van-36', '36" vanity', 36, 1, 'floor', 850),
+  vanity('van-48', '48" vanity', 48, 1, 'floor', 1150),
+  vanity('van-60d', '60" double vanity', 60, 2, 'floor', 1650),
+  vanity('van-36f', '36" floating vanity', 36, 1, 'floating', 1100),
+  vanity('van-60fd', '60" floating double vanity', 60, 2, 'floating', 2100),
+]
+
+// ---------------- Shower / tub (wall tile comes from BACKSPLASHES) ----------------
+
+export interface ShowerSystem extends BaseItem {
+  unit: 'pkg'
+  /** Tub or base, valve, drain and shower head (installed labor is in Settings) */
+  cost: number
+  /** Walls are tiled (uses the chosen wall tile + waterproofing) */
+  tiled: boolean
+  /** Needs a glass door or panel */
+  glass: boolean
+  promptText: string
+}
+
+export const SHOWER_SYSTEMS: ShowerSystem[] = [
+  { id: 'sh-tub-tile', name: 'New tub + tiled surround', brand: 'Kohler', supplier: SUPPLIERS.bathFixtures, rooms: ['bath'], unit: 'pkg', cost: 1800, tiled: true, glass: false, swatch: { color: '#f5f5f2' }, promptText: 'a new white alcove soaking tub with tiled walls around it' },
+  { id: 'sh-walkin', name: 'Tiled walk-in shower', brand: 'Kohler', supplier: SUPPLIERS.bathFixtures, rooms: ['bath'], unit: 'pkg', cost: 2400, tiled: true, glass: true, swatch: { color: '#e9ecef' }, promptText: 'a tiled walk-in shower with a low-profile base' },
+  { id: 'sh-curbless', name: 'Curbless shower, linear drain', brand: 'Kohler', supplier: SUPPLIERS.bathFixtures, rooms: ['bath'], unit: 'pkg', cost: 3800, tiled: true, glass: true, swatch: { color: '#dfe3e6' }, promptText: 'a curbless zero-threshold tiled shower with a linear drain, floor tile running into the shower' },
+  { id: 'sh-conversion', name: 'Tub-to-shower conversion', brand: 'Kohler', supplier: SUPPLIERS.bathFixtures, rooms: ['bath'], unit: 'pkg', cost: 2600, tiled: true, glass: true, swatch: { color: '#e6e9ec' }, promptText: 'the old tub replaced by a tiled walk-in shower in the same alcove' },
+  { id: 'sh-acrylic', name: 'Acrylic tub/shower surround', brand: 'Kohler', supplier: SUPPLIERS.bathFixtures, rooms: ['bath'], unit: 'pkg', cost: 2200, tiled: false, glass: false, swatch: { color: '#f7f7f5' }, promptText: 'a new white acrylic tub with a smooth one-piece acrylic wall surround' },
+]
+
+export interface ShowerGlass extends BaseItem {
+  unit: 'each'
+  cost: number
+  promptText: string
+}
+
+export const SHOWER_GLASS: ShowerGlass[] = [
+  { id: 'gl-frameless-door', name: 'Frameless glass door', brand: 'Custom glass', supplier: SUPPLIERS.glass, rooms: ['bath'], unit: 'each', cost: 1800, swatch: { color: '#dbe9ee' }, promptText: 'a frameless clear glass hinged shower door' },
+  { id: 'gl-panel', name: 'Fixed glass panel', brand: 'Custom glass', supplier: SUPPLIERS.glass, rooms: ['bath'], unit: 'each', cost: 1200, swatch: { color: '#e3eef1' }, promptText: 'a single fixed frameless clear glass panel (open walk-in entry)' },
+  { id: 'gl-slider', name: 'Semi-frameless sliding door', brand: 'Custom glass', supplier: SUPPLIERS.glass, rooms: ['bath'], unit: 'each', cost: 950, swatch: { color: '#d7e4e9' }, promptText: 'a semi-frameless clear glass sliding shower door' },
+]
+
+export interface Toilet extends BaseItem {
+  unit: 'each'
+  cost: number
+  promptText: string
+}
+
+export const TOILETS: Toilet[] = [
+  { id: 'tl-comfort', name: 'Comfort-height elongated', brand: 'Kohler', supplier: SUPPLIERS.bathFixtures, rooms: ['bath'], unit: 'each', cost: 380, swatch: { color: '#fbfbfa' }, promptText: 'a white comfort-height elongated toilet' },
+  { id: 'tl-one-piece', name: 'One-piece skirted', brand: 'Kohler', supplier: SUPPLIERS.bathFixtures, rooms: ['bath'], unit: 'each', cost: 650, swatch: { color: '#fbfbfa' }, promptText: 'a sleek white one-piece skirted toilet' },
+  { id: 'tl-smart', name: 'Smart bidet toilet', brand: 'Kohler', supplier: SUPPLIERS.bathFixtures, rooms: ['bath'], unit: 'each', cost: 1800, swatch: { color: '#f4f5f6' }, promptText: 'a modern white smart toilet with integrated bidet seat' },
+]
+
+export interface BathLighting extends BaseItem {
+  unit: 'pkg'
+  cost: number
+  promptText: string
+}
+
+export const BATH_LIGHTING: BathLighting[] = [
+  { id: 'bl-bar', name: 'Mirror + vanity light bar', brand: 'Lighting', supplier: SUPPLIERS.lighting, rooms: ['bath'], unit: 'pkg', cost: 450, swatch: { color: '#f4efe2' }, promptText: 'a simple rectangular mirror with a 3-light vanity light bar above it' },
+  { id: 'bl-sconces', name: 'Framed mirror + 2 sconces', brand: 'Lighting', supplier: SUPPLIERS.lighting, rooms: ['bath'], unit: 'pkg', cost: 750, swatch: { color: '#efe4c8' }, promptText: 'a framed mirror flanked by two wall sconces' },
+  { id: 'bl-led', name: 'Lighted LED mirror + recessed', brand: 'Lighting', supplier: SUPPLIERS.lighting, rooms: ['bath'], unit: 'pkg', cost: 1200, swatch: { color: '#f7f3e6' }, promptText: 'a frameless backlit LED mirror and recessed ceiling lights' },
+]
+
+/** Bath fixture finishes (faucets, shower trim, accessories). */
+export const BATH_FIXTURE_FINISH_IDS = ['chrome', 'nickel', 'black', 'brass']
 
 // ---------------- A design option: one product per category ----------------
 
@@ -300,6 +399,13 @@ export interface Selection {
   paintId: string | null
   flooringId: string | null
   lightingId: string | null
+  // Bath (kitchen designs leave these empty). In a bath, cabinet color/door style = vanity,
+  // countertop = vanity top, backsplash = shower wall tile, faucet finish = all bath fixtures.
+  vanityId: string | null
+  showerId: string | null
+  glassId: string | null
+  toiletId: string | null
+  bathLightId: string | null
 }
 
 export const EMPTY_SELECTION: Selection = {
@@ -314,6 +420,11 @@ export const EMPTY_SELECTION: Selection = {
   paintId: null,
   flooringId: null,
   lightingId: null,
+  vanityId: null,
+  showerId: null,
+  glassId: null,
+  toiletId: null,
+  bathLightId: null,
 }
 
 // ---------------- Lookup helpers ----------------
@@ -334,9 +445,18 @@ export function resolveSelection(s: Selection) {
     paint: find(PAINT_COLORS, s.paintId),
     flooring: find(FLOORING, s.flooringId),
     lighting: find(LIGHTING, s.lightingId),
+    vanity: find(VANITIES, s.vanityId),
+    shower: find(SHOWER_SYSTEMS, s.showerId),
+    glass: find(SHOWER_GLASS, s.glassId),
+    toilet: find(TOILETS, s.toiletId),
+    bathLight: find(BATH_LIGHTING, s.bathLightId),
   }
 }
 export type ResolvedSelection = ReturnType<typeof resolveSelection>
 
 /** Only products marked available show up in the pickers. */
 export const isAvailable = (item: { available?: boolean }) => item.available !== false
+
+/** Available and offered in this room. */
+export const offeredIn = (room: CatalogRoom) => (item: { available?: boolean; rooms?: CatalogRoom[] }) =>
+  isAvailable(item) && (!item.rooms || item.rooms.includes(room))

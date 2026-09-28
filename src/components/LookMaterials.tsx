@@ -1,11 +1,12 @@
 import type { Selection } from '../config/catalog'
 import { materialRows } from '../lib/materials'
+import type { RoomType } from '../types'
 import { Swatch } from './Swatch'
 
-export function LookMaterials({ selection }: { selection: Selection }) {
+export function LookMaterials({ selection, room }: { selection: Selection; room?: RoomType }) {
   return (
     <ul className="space-y-3">
-      {materialRows(selection).map((row) => (
+      {materialRows(selection, { room }).map((row) => (
         <li key={row.label} className="flex items-center gap-3">
           {row.swatch ? (
             <Swatch swatch={row.swatch} className="h-10 w-10" />

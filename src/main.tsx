@@ -12,7 +12,7 @@ import './index.css'
 const root = document.documentElement
 root.style.setProperty('--brand-accent', BRAND.colors.accent)
 root.style.setProperty('--brand-accent-dark', BRAND.colors.accentDark)
-document.title = `${BRAND.name} · Kitchen Consult`
+document.title = `${BRAND.name} · Remodel Consult`
 
 registerSW({ immediate: true })
 void requestPersistentStorage()

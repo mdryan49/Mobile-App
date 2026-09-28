@@ -89,6 +89,21 @@ const SECTIONS: { title: string; fields: { key: NumKey; label: string; suffix: s
       { key: 'wallLoadBearingPerLf', label: 'Load-bearing: per foot', suffix: '$/lf', hint: 'Beam & posts. Unverified walls use this rate.' },
     ],
   },
+  {
+    title: 'Bath labor',
+    fields: [
+      { key: 'bathDemoFullGut', label: 'Bath demo: full gut', suffix: '$' },
+      { key: 'bathDemoPartial', label: 'Bath demo: partial', suffix: '$' },
+      { key: 'bathPlumbingRoughIn', label: 'Bath plumbing rough-in', suffix: '$' },
+      { key: 'vanityInstall', label: 'Vanity install', suffix: '$' },
+      { key: 'toiletInstall', label: 'Toilet install', suffix: '$' },
+      { key: 'showerWaterproofPerSqft', label: 'Shower waterproofing', suffix: '$/sqft' },
+      { key: 'bathFixtureTrim', label: 'Faucets, trim & accessories', suffix: '$' },
+      { key: 'glassInstall', label: 'Shower glass install', suffix: '$' },
+      { key: 'exhaustFan', label: 'Exhaust fan', suffix: '$' },
+      { key: 'heatedFloorPerSqft', label: 'Heated floor', suffix: '$/sqft' },
+    ],
+  },
 ]
 
 function SettingsForm() {

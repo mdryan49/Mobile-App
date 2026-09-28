@@ -3,8 +3,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Button, SamplePricingBadge } from '../components/ui'
 import { PROPOSAL } from '../config/proposal'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
-import { calculateEstimate, moneyRange } from '../lib/estimate'
-import { activeVersion, availableLooks, lookName, lookSelection, lookWalls } from '../lib/looks'
+import { estimateFor, moneyRange } from '../lib/estimate'
+import { activeVersion, availableLooks, hasMeasurements, lookName, lookSelection, lookWalls } from '../lib/looks'
+import { scopeToRoom, updateRoom } from '../lib/project'
 import type { ProposalResult } from '../lib/pdf'
 import { useSettings } from '../lib/settings'
 import type { PricingSettings } from '../config/defaultSettings'
@@ -14,7 +15,7 @@ import { useProjectContext } from './ProjectLayout'
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 
 export default function ProposalStep() {
-  const { project, update } = useProjectContext()
+  const { stored, updateStored, setRoom } = useProjectContext()
   const { settings } = useSettings()
   const navigate = useNavigate()
   const [pdf, setPdf] = useState<(ProposalResult & { url: string; builtAt: number }) | null>(null)
@@ -22,30 +23,41 @@ export default function ProposalStep() {
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
 
-  // Options with nothing picked are left off the proposal
-  const allLooks = availableLooks(project)
-  const looks = allLooks.filter((l) => !calculateEstimate(project.measurements, lookSelection(project, l), settings.pricing, lookWalls(project, l)).empty)
-  const emptyLooks = allLooks.filter((l) => !looks.includes(l))
-  const recommended: LookKey | undefined = project.recommended && looks.includes(project.recommended) ? project.recommended : looks[0]
-  const missingRenders = looks.filter((l) => !activeVersion(project, l))
+  // Each room: options with something picked go on the proposal (empty ones are left off)
+  const rooms = stored.rooms.map((room) => {
+    const p = scopeToRoom(stored, room.id)
+    const measured = hasMeasurements(p)
+    const all = availableLooks(p)
+    const looks = measured ? all.filter((l) => !estimateFor(p, lookSelection(p, l), settings.pricing, lookWalls(p, l)).empty) : []
+    const recommended: LookKey | undefined = p.recommended && looks.includes(p.recommended) ? p.recommended : looks[0]
+    return { room, p, measured, looks, recommended, emptyLooks: all.filter((l) => !looks.includes(l)), missingRenders: looks.filter((l) => !activeVersion(p, l)) }
+  })
+  const included = rooms.filter((r) => r.recommended)
+  const skipped = rooms.filter((r) => !r.recommended)
+  const multi = stored.rooms.length > 1
   const sp = settings.salesperson
   const missingSales = !sp.name || !sp.phone || !sp.email
-  const stale = pdf && project.updatedAt > pdf.builtAt
+  const stale = pdf && stored.updatedAt > pdf.builtAt
+  const goTo = (roomId: string, step: string) => {
+    setRoom(roomId)
+    navigate(`../${step}`, { relative: 'path', replace: true })
+  }
 
   useEffect(() => () => {
     if (pdf) URL.revokeObjectURL(pdf.url)
   }, [pdf])
 
-  if (project.measurements.baseCabinetLf <= 0 || !recommended) {
+  if (!included.length) {
+    const first = rooms[0]
     return (
       <section>
         <h1 className="text-3xl font-bold">Proposal</h1>
         <div className="mt-6 rounded-2xl border-2 border-dashed border-neutral-200 px-6 py-16 text-center">
           <p className="text-lg text-neutral-600">
-            {!recommended ? 'Pick products for at least one design option first.' : 'Enter measurements first so the proposal can be priced.'}
+            {first.measured ? 'Pick products for at least one design option first.' : 'Enter measurements first so the proposal can be priced.'}
           </p>
-          <Button className="mt-4" onClick={() => navigate(!recommended ? '../design' : '../scope', { relative: 'path', replace: true })}>
-            {!recommended ? 'Go to design options' : 'Go to measurements'}
+          <Button className="mt-4" onClick={() => goTo(first.room.id, first.measured ? 'design' : 'scope')}>
+            {first.measured ? 'Go to design options' : 'Go to measurements'}
           </Button>
         </div>
       </section>
@@ -59,9 +71,10 @@ export default function ProposalStep() {
     try {
       const { buildProposalPdf, proposalNumber } = await import('../lib/pdf') // loaded on demand (jsPDF is large)
       // Keep one proposal number per consultation, even when regenerated
-      const number = project.proposal?.number ?? proposalNumber(project)
-      const result = await buildProposalPdf({ ...project, recommended: recommended ?? null }, settings, number, looks)
-      if (!project.proposal) update((p) => ({ ...p, proposal: { number, createdAt: Date.now() } }))
+      const number = stored.proposal?.number ?? proposalNumber(stored)
+      const plans = included.map((r) => ({ roomId: r.room.id, looks: r.looks, recommended: r.recommended! }))
+      const result = await buildProposalPdf(stored, settings, number, plans)
+      if (!stored.proposal) updateStored((s) => ({ ...s, proposal: { number, createdAt: Date.now() } }))
       setPdf({ ...result, url: URL.createObjectURL(result.blob), builtAt: Date.now() + 1000 })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'The PDF could not be created.')
@@ -122,22 +135,33 @@ export default function ProposalStep() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold">Proposal</h1>
-          <p className="mt-1 text-neutral-600">A branded 4-page PDF they keep. Pick the look to feature, then create it.</p>
+          <p className="mt-1 text-neutral-600">
+            A branded PDF they keep{multi ? ', covering every room with a combined total' : ''}. Pick the option to feature, then create it.
+          </p>
         </div>
         <SamplePricingBadge />
       </div>
 
-      <div>
-        <h2 className="mb-3 text-xl font-bold">Which look do you recommend?</h2>
-        <div className={`grid gap-3 ${looks.length === 1 ? 'max-w-sm grid-cols-1' : looks.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-          {looks.map((l) => (
-            <RecommendCard key={l} project={project} pricing={settings.pricing} look={l} selected={l === recommended} onClick={() => update((p) => ({ ...p, recommended: l }))} />
-          ))}
+      {included.map((r) => (
+        <div key={r.room.id}>
+          <h2 className="mb-3 text-xl font-bold">{multi ? `${r.room.name}: which option do you recommend?` : 'Which option do you recommend?'}</h2>
+          <div className={`grid gap-3 ${r.looks.length === 1 ? 'max-w-sm grid-cols-1' : r.looks.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+            {r.looks.map((l) => (
+              <RecommendCard
+                key={l}
+                project={r.p}
+                pricing={settings.pricing}
+                look={l}
+                selected={l === r.recommended}
+                onClick={() => updateStored((s) => updateRoom(s, r.room.id, (p) => ({ ...p, recommended: l })))}
+              />
+            ))}
+          </div>
         </div>
-        <p className="mt-2 text-sm text-neutral-500">The recommended option gets the cover page and is listed first.</p>
-      </div>
+      ))}
+      <p className="-mt-5 text-sm text-neutral-500">The recommended option gets the cover page and is listed first.</p>
 
-      {(missingSales || missingRenders.length > 0 || emptyLooks.length > 0) && (
+      {(missingSales || skipped.length > 0 || included.some((r) => r.emptyLooks.length || r.missingRenders.length)) && (
         <div className="space-y-2 rounded-xl bg-amber-50 p-4 text-amber-900">
           {missingSales && (
             <p>
@@ -148,18 +172,35 @@ export default function ProposalStep() {
               so they print on the proposal.
             </p>
           )}
-          {emptyLooks.length > 0 && (
-            <p>
-              <strong>{emptyLooks.map((l) => lookName(project, l)).join(', ')}</strong> has no products picked, so it's left off the proposal.
+          {skipped.map((r) => (
+            <p key={r.room.id}>
+              <strong>The {r.room.name.toLowerCase()} is left off</strong>: {r.measured ? 'no products picked yet.' : 'no measurements yet.'}{' '}
+              <button type="button" className="font-semibold text-accent underline" onClick={() => goTo(r.room.id, r.measured ? 'design' : 'scope')}>
+                Fix it
+              </button>
             </p>
+          ))}
+          {included.map((r) =>
+            r.emptyLooks.length > 0 ? (
+              <p key={`e${r.room.id}`}>
+                <strong>{r.emptyLooks.map((l) => lookName(r.p, l)).join(', ')}</strong>
+                {multi ? ` (${r.room.name})` : ''} has no products picked, so it's left off the proposal.
+              </p>
+            ) : null,
           )}
-          {missingRenders.length > 0 && (
-            <p>
-              <strong>No rendering yet for {missingRenders.map((l) => lookName(project, l)).join(', ')}.</strong> The PDF will show an empty frame there.{' '}
-              <Link to="../renderings" relative="path" replace className="font-semibold text-accent underline">
-                Render now
-              </Link>
-            </p>
+          {included.map((r) =>
+            r.missingRenders.length > 0 ? (
+              <p key={`m${r.room.id}`}>
+                <strong>
+                  No rendering yet for {r.missingRenders.map((l) => lookName(r.p, l)).join(', ')}
+                  {multi ? ` (${r.room.name})` : ''}.
+                </strong>{' '}
+                The PDF will show an empty frame there.{' '}
+                <button type="button" className="font-semibold text-accent underline" onClick={() => goTo(r.room.id, 'renderings')}>
+                  Render now
+                </button>
+              </p>
+            ) : null,
           )}
         </div>
       )}
@@ -185,7 +226,7 @@ export default function ProposalStep() {
                 <div>
                   <div className="font-bold">{pdf.filename}</div>
                   <div className="text-sm text-neutral-500">
-                    Proposal {pdf.number} · 4 pages · {(pdf.blob.size / 1024 / 1024).toFixed(1)} MB
+                    Proposal {pdf.number} · {2 + included.length * 2} pages · {(pdf.blob.size / 1024 / 1024).toFixed(1)} MB
                   </div>
                 </div>
               </div>
@@ -217,7 +258,7 @@ export default function ProposalStep() {
 
 function RecommendCard({ project, pricing, look, selected, onClick }: { project: Project; pricing: PricingSettings; look: LookKey; selected: boolean; onClick: () => void }) {
   const url = usePhotoUrl(activeVersion(project, look)?.id ?? project.heroPhotoId)
-  const est = calculateEstimate(project.measurements, lookSelection(project, look), pricing, lookWalls(project, look))
+  const est = estimateFor(project, lookSelection(project, look), pricing, lookWalls(project, look))
   return (
     <button
       type="button"

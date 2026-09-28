@@ -4,7 +4,7 @@
 export const BRAND = {
   name: 'Ryan Brothers',
   shortName: 'Ryan Bros',
-  tagline: 'Kitchen Remodeling',
+  tagline: 'Kitchen & Bath Remodeling',
   phone: '(555) 555-0100',
   email: 'hello@ryanbrothers.example',
   website: 'ryanbrothers.example',

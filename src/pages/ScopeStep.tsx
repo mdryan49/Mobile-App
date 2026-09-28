@@ -5,8 +5,8 @@ import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { money, wallCost, WALL_LABELS } from '../lib/estimate'
 import { newId } from '../lib/id'
 import { useSettings } from '../lib/settings'
-import { applySuggestions, suggestedBacksplashSqft, suggestedCountertopSqft } from '../lib/project'
-import type { DemoScope, Layout, Measurements, WallChange } from '../types'
+import { applyBathSuggestions, applySuggestions, DEFAULT_SHOWER_TILE_SQFT, suggestedBacksplashSqft, suggestedCountertopSqft } from '../lib/project'
+import type { BathDemoScope, BathMeasurements, DemoScope, Layout, Measurements, WallChange } from '../types'
 import { useProjectContext } from './ProjectLayout'
 
 const LAYOUTS: { value: Layout; label: string; hint: string }[] = [
@@ -23,6 +23,73 @@ const DEMO_SCOPES: { value: DemoScope; label: string; hint: string }[] = [
 ]
 
 export default function ScopeStep() {
+  const { project } = useProjectContext()
+  return project.roomType === 'bath' ? <BathScope /> : <KitchenScope />
+}
+
+const BATH_DEMO: { value: BathDemoScope; label: string; hint: string }[] = [
+  { value: 'full-gut', label: 'Full gut', hint: 'Down to studs, new rough-in' },
+  { value: 'partial', label: 'Partial', hint: 'Keep walls & plumbing lines' },
+]
+
+function BathScope() {
+  const { project, update } = useProjectContext()
+  const b = project.bath
+  const set = (patch: Partial<BathMeasurements>) => update((p) => ({ ...p, bath: applyBathSuggestions({ ...p.bath, ...patch }) }))
+
+  return (
+    <section className="space-y-10">
+      <div>
+        <h1 className="text-3xl font-bold">Bath measurements & scope</h1>
+        <p className="mt-1 text-neutral-600">Full bath remodel. Rough numbers are fine. The estimate is shown as a range.</p>
+      </div>
+
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold">Sizes</h2>
+        <div className="grid gap-5 md:grid-cols-2">
+          <Field label="Floor area" hint="Length × width of the room">
+            <NumberInput value={b.floorSqft} onChange={(floorSqft) => set({ floorSqft })} suffix="sq ft" />
+          </Field>
+          <Field label="Vanity width" hint="Used when you keep the existing vanity size">
+            <NumberInput value={b.vanityWidthIn} onChange={(vanityWidthIn) => set({ vanityWidthIn })} suffix="in" />
+          </Field>
+          <SuggestedField
+            label="Shower / tub wall tile"
+            value={b.showerTileSqft}
+            manual={b.showerTileManual}
+            suggestion={DEFAULT_SHOWER_TILE_SQFT}
+            onChange={(showerTileSqft) => set({ showerTileSqft, showerTileManual: true })}
+            onReset={() => set({ showerTileManual: false })}
+            explain="standard 5 ft alcove tiled to 8 ft"
+          />
+          <Field label="Wall paint area" hint="Walls above tile, minus mirror & window">
+            <NumberInput value={b.paintSqft} onChange={(paintSqft) => set({ paintSqft })} suffix="sq ft" />
+          </Field>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold">Demolition</h2>
+        <ChoiceGroup options={BATH_DEMO} value={b.demoScope} onChange={(demoScope) => set({ demoScope })} columns={2} />
+      </div>
+
+      <WallsSection />
+
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold">Additional work</h2>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Toggle label="Move plumbing" hint="Relocate toilet, vanity or shower" checked={b.movePlumbing} onChange={(movePlumbing) => set({ movePlumbing })} />
+          <Toggle label="Electrical updates" hint="GFCI outlets, new circuits" checked={b.electricalUpdates} onChange={(electricalUpdates) => set({ electricalUpdates })} />
+          <Toggle label="New exhaust fan" hint="Quiet, vented to outside" checked={b.exhaustFan} onChange={(exhaustFan) => set({ exhaustFan })} />
+          <Toggle label="Heated floor" hint="Priced with new flooring" checked={b.heatedFloor} onChange={(heatedFloor) => set({ heatedFloor })} />
+          <Toggle label="Permits" hint="Pull permits & schedule inspections" checked={b.permits} onChange={(permits) => set({ permits })} />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function KitchenScope() {
   const { project, update } = useProjectContext()
   const m = project.measurements
 
@@ -192,7 +259,7 @@ function WallsSection() {
       )}
 
       {project.photos.length === 0 ? (
-        <p className="rounded-xl border-2 border-dashed border-neutral-200 p-6 text-center text-neutral-500">Add kitchen photos first, then mark the wall on one.</p>
+        <p className="rounded-xl border-2 border-dashed border-neutral-200 p-6 text-center text-neutral-500">Add {project.roomName.toLowerCase()} photos first, then mark the wall on one.</p>
       ) : (
         <div>
           <div className="mb-2 text-sm font-semibold tracking-wide text-neutral-500 uppercase">Mark a wall on</div>

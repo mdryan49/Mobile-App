@@ -1,14 +1,17 @@
-# Ryan Brothers · Kitchen Consult (prototype)
+# Ryan Brothers · Remodel Consult (prototype)
 
-An installable iPad web app for in-home kitchen remodel consultations. At the kitchen table, the salesperson:
+An installable iPad web app for in-home **kitchen and bath** remodel consultations. Each consultation is a
+**Kitchen**, a **Bath**, or **Both** (chosen when you start one; change it later on the Customer step).
+With both, a **Kitchen | Bath** switch appears at the top of the room steps. At the kitchen table, the salesperson:
 
 1. Enters **customer info**
-2. Takes **3-6 kitchen photos** and picks a hero shot
+2. Takes **3-6 photos per room** and picks a hero shot
 3. Fills in **measurements & scope**, and paints any **wall to remove** right on a photo
 4. Builds **up to 3 design options** from supplier products, with live pricing
 5. Shows the **estimate** for each option side by side, as price ranges
 6. Generates **AI renderings** of the homeowner's actual kitchen for each option (before/after slider)
-7. Creates a branded **4-page proposal PDF** to share, download or print
+7. Creates a branded **proposal PDF** to share, download or print (4 pages for one room, 6 for kitchen + bath,
+   with a combined total on the cover)
 
 Everything is stored **on the iPad only** (IndexedDB). No login, no cloud database.
 
@@ -74,6 +77,20 @@ hardware, wall paint, flooring, lighting) pick a product, or leave it on **Keep 
 - Change something after rendering and tap **Update picture**. Additions are edited onto the current rendering;
   going back to "keep existing" or changing walls re-renders from the original photo.
 
+## Baths (full bath remodel)
+
+The bath uses the same flow: photos, **bath measurements** (floor area, vanity width, shower wall tile, paint area,
+full gut or partial, plumbing moves, fan, heated floor, permits), design options, estimate and renderings.
+
+Bath design categories: **vanity, vanity color, door style, vanity top, shower / tub, shower tile, glass, toilet,
+fixture finish, hardware, wall paint, flooring, mirror & lighting**. Shower / tub is chosen per option:
+new tub + tiled surround, tiled walk-in shower, curbless shower, tub-to-shower conversion or acrylic surround
+(or keep the existing one and just re-tile the walls).
+
+- Vanity color & door style reuse the cabinet finishes; the vanity top reuses the countertop catalog; shower walls reuse the tile catalog.
+- A tiled shower with no tile picked yet is priced with a **$10/sq ft tile allowance** (`TILE_ALLOWANCE_PER_SQFT` in `src/lib/estimate.ts`).
+- Renderings use bath-specific prompts that keep the vanity, toilet and tub/shower in the same places.
+
 ## Wall removal
 
 **Scope → Walls to remove → Mark a wall on (photo)**. Paint over the wall with a finger, choose load-bearing /
@@ -102,6 +119,12 @@ Rename your suppliers once in `SUPPLIERS` at the top of the file.
 | `PAINT_COLORS` | color only (labor in Settings) |
 | `FLOORING` | per sq ft **installed** |
 | `LIGHTING` | per package, installed |
+| **Bath:** `VANITIES` | each (x door style multiplier & color upcharge) + install |
+| `SHOWER_SYSTEMS` | per package (tub/base, valve, drain); tiled walls add tile + install + waterproofing |
+| `SHOWER_GLASS`, `TOILETS`, `BATH_LIGHTING` | each / per package |
+
+- Products can be limited to one room with `rooms: ['bath']` or `rooms: ['kitchen']` (e.g. hardwood is kitchen-only, hex mosaic is bath-only).
+- Bath suppliers are **placeholders**: rename `vanities`, `bathFixtures` and `glass` in `SUPPLIERS`.
 
 - `COUNTERTOP_LOOKS` and each item's `promptText` describe finishes to the AI. Keep them visual ("white quartz with soft gray veining").
 - Save, commit and push. Netlify redeploys automatically.
@@ -113,6 +136,8 @@ Home screen → **Settings** → PIN (default **1234**; change it on the same sc
 - **Company markup** is built into every line price and **never shown to homeowners**.
 - **Contingency** shows as its own line.
 - **Wall removal** rates: per wall + per foot, for non-load-bearing and load-bearing walls.
+- **Bath labor**: demo (full gut / partial), plumbing rough-in, vanity & toilet install, shower waterproofing,
+  faucets & trim, glass install, exhaust fan, heated floor.
 - **Price range** sets the ± on totals.
 - **Salesperson** name, phone and email print on the proposal.
 - Starting values are in `src/config/defaultSettings.ts`. Edits made in Settings are saved on that iPad.
@@ -147,7 +172,8 @@ src/lib/prompt.ts             AI rendering prompts
 src/lib/renderJobs.ts         Render queue with retry (never loses inputs)
 src/lib/renderActions.ts      Decides quick edit vs. fresh render for a design option
 src/lib/wallMask.ts           Paints marked walls red for the AI reference image
-src/pages/DesignStep.tsx      Build design options from supplier products
+src/pages/DesignStep.tsx      Build design options from supplier products (kitchen & bath pickers)
+src/lib/project.ts            Rooms (kitchen/bath), defaults, migration of older saves
 src/lib/pdf.ts                Proposal PDF (jsPDF, client-side)
 src/pages/                    One screen per step
 netlify/functions/render.mts  Server-side Gemini proxy (keeps the API key secret)

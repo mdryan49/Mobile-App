@@ -1,9 +1,9 @@
 import { putPhoto, saveProject } from './db'
 import { EMPTY_SELECTION } from '../config/catalog'
-import { applySuggestions, emptyProject } from './project'
+import { applySuggestions, emptyProject, scopeToRoom, unscope } from './project'
 import { compressImage } from './image'
 import { newId } from './id'
-import type { Project } from '../types'
+import type { StoredProject } from '../types'
 
 /**
  * DEMO MODE
@@ -27,8 +27,9 @@ async function fetchDemoPhoto(n: number): Promise<Blob> {
   throw new Error(`Demo photo ${n} is missing from /public/demo`)
 }
 
-export async function createDemoProject(): Promise<Project> {
-  const p = emptyProject()
+export async function createDemoProject(): Promise<StoredProject> {
+  const stored = emptyProject(['kitchen'])
+  const p = scopeToRoom(stored)
   p.isDemo = true
   p.customer = {
     name: 'Jordan & Casey Sample',
@@ -95,6 +96,7 @@ export async function createDemoProject(): Promise<Project> {
     p.photos.push({ id, width, height, addedAt: Date.now() })
   }
   p.heroPhotoId = p.photos[0]?.id ?? null
-  await saveProject(p)
-  return p
+  const result = unscope(stored, p)
+  await saveProject(result)
+  return result
 }

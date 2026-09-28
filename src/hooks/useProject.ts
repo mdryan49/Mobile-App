@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getProject, saveProject } from '../lib/db'
-import type { Project } from '../types'
+import type { StoredProject } from '../types'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -9,10 +9,10 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error'
  * flushed on unmount and when the app is backgrounded, so nothing is lost.
  */
 export function useProject(id: string | undefined) {
-  const [project, setProject] = useState<Project | null>(null)
+  const [project, setProject] = useState<StoredProject | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [saveState, setSaveState] = useState<SaveState>('idle')
-  const pending = useRef<Project | null>(null)
+  const pending = useRef<StoredProject | null>(null)
   const timer = useRef<number | undefined>(undefined)
 
   const flush = useCallback(async () => {
@@ -59,7 +59,7 @@ export function useProject(id: string | undefined) {
   }, [flush])
 
   const update = useCallback(
-    (fn: (p: Project) => Project) => {
+    (fn: (p: StoredProject) => StoredProject) => {
       setProject((prev) => {
         if (!prev) return prev
         const next = { ...fn(prev), updatedAt: Date.now() }

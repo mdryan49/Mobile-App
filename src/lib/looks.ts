@@ -40,3 +40,8 @@ export function activeVersion(p: Project, look: LookKey, photoId = p.heroPhotoId
 export function withActive(p: Project, look: LookKey, photoId: string, renderId: string): Project['activeRender'] {
   return { ...p.activeRender, [renderKey(look, photoId)]: renderId }
 }
+
+/** Enough measurements to price this room? (Kitchen: cabinet run. Bath: floor area.) */
+export function hasMeasurements(p: Project): boolean {
+  return p.roomType === 'bath' ? p.bath.floorSqft > 0 : p.measurements.baseCabinetLf > 0
+}
