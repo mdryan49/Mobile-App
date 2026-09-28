@@ -65,7 +65,7 @@ export function useProject(id: string | undefined) {
         const next = { ...fn(prev), updatedAt: Date.now() }
         pending.current = next
         window.clearTimeout(timer.current)
-        timer.current = window.setTimeout(() => void flush(), 400)
+        timer.current = window.setTimeout(() => void flush(), 200)
         return next
       })
     },

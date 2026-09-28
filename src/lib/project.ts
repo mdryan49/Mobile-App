@@ -1,5 +1,5 @@
-import { TIER_DEFAULTS } from '../config/catalog'
-import type { Measurements, Project } from '../types'
+import { EMPTY_SELECTION, type Selection } from '../config/catalog'
+import type { Design, Measurements, Project } from '../types'
 import { newId } from './id'
 
 export const DEFAULT_MEASUREMENTS: Measurements = {
@@ -16,11 +16,8 @@ export const DEFAULT_MEASUREMENTS: Measurements = {
   demoScope: 'cabinets-counters',
   movePlumbing: false,
   electricalUpdates: false,
-  newFlooring: false,
   flooringSqft: 0,
-  paintWalls: true,
   paintSqft: 0,
-  newLighting: false,
   permits: true,
 }
 
@@ -47,6 +44,20 @@ export function applySuggestions(m: Measurements): Measurements {
   }
 }
 
+export const MAX_DESIGNS = 3
+const LETTERS = ['A', 'B', 'C', 'D']
+
+/** A blank design option: nothing chosen yet, so everything is "keep existing". */
+export function newDesign(existing: Design[], from?: Design): Design {
+  const letter = LETTERS.find((l) => !existing.some((d) => d.name.startsWith(`Option ${l}`))) ?? String(existing.length + 1)
+  return {
+    id: newId(),
+    name: from ? `Option ${letter}: ${from.name.replace(/^Option [A-Z0-9]+:?\s*/, '') || 'Copy'}` : `Option ${letter}`,
+    selection: from ? structuredClone(from.selection) : { ...EMPTY_SELECTION },
+    removeWalls: from?.removeWalls ?? true,
+  }
+}
+
 export function emptyProject(): Project {
   const now = Date.now()
   return {
@@ -57,10 +68,10 @@ export function emptyProject(): Project {
     photos: [],
     heroPhotoId: null,
     measurements: { ...DEFAULT_MEASUREMENTS },
-    selections: structuredClone(TIER_DEFAULTS),
+    designs: [newDesign([])],
+    walls: [],
     renders: [],
     activeRender: {},
-    custom: null,
     recommended: null,
     proposal: null,
     declutter: true,
@@ -72,14 +83,9 @@ export function normalizeProject(p: Project): Project {
   return {
     ...p,
     measurements: { ...DEFAULT_MEASUREMENTS, ...p.measurements },
-    selections: {
-      good: { ...TIER_DEFAULTS.good, ...p.selections?.good },
-      better: { ...TIER_DEFAULTS.better, ...p.selections?.better },
-      best: { ...TIER_DEFAULTS.best, ...p.selections?.best },
-    },
+    ...migrateDesigns(p),
+    walls: p.walls ?? [],
     ...migrateRenders(p),
-    custom: p.custom ? { ...p.custom, selection: { ...TIER_DEFAULTS[p.custom.baseTier], ...p.custom.selection } } : null,
-    recommended: p.recommended ?? null,
     proposal: p.proposal ?? null,
     declutter: p.declutter ?? true,
   }
@@ -88,12 +94,30 @@ export function normalizeProject(p: Project): Project {
 /** Older saves had renders of the hero photo only, keyed by look. Attach them to that photo. */
 function migrateRenders(p: Project): Pick<Project, 'renders' | 'activeRender'> {
   const hero = p.heroPhotoId ?? ''
-  const renders = (p.renders ?? []).map((r) => (r.sourcePhotoId ? r : { ...r, sourcePhotoId: hero }))
+  const designIds = new Set(migrateDesigns(p).designs.map((d) => d.id))
+  // Renders of looks that no longer exist (e.g. the old Custom Mix) are dropped
+  const renders = (p.renders ?? []).filter((r) => designIds.has(r.look)).map((r) => (r.sourcePhotoId ? r : { ...r, sourcePhotoId: hero }))
   const activeRender: Record<string, string> = {}
   for (const [k, v] of Object.entries(p.activeRender ?? {})) {
-    if (!v) continue
+    if (!v || !renders.some((r) => r.id === v)) continue
     if (k.includes('@')) activeRender[k] = v
     else activeRender[`${k}@${renders.find((r) => r.id === v)?.sourcePhotoId ?? hero}`] = v
   }
   return { renders, activeRender }
+}
+
+type LegacyProject = Project & { selections?: Record<string, Partial<Selection>> }
+const LEGACY_TIERS: [string, string][] = [['good', 'Option A: Good'], ['better', 'Option B: Better'], ['best', 'Option C: Best']]
+
+/** Before design options existed, projects had Good/Better/Best. They become Options A-C (same ids, so renders keep working). */
+function migrateDesigns(p: LegacyProject): Pick<Project, 'designs' | 'recommended'> {
+  if (p.designs?.length) {
+    const designs = p.designs.map((d) => ({ ...d, selection: { ...EMPTY_SELECTION, ...d.selection }, removeWalls: d.removeWalls ?? true }))
+    return { designs, recommended: designs.some((d) => d.id === p.recommended) ? p.recommended : null }
+  }
+  if (p.selections) {
+    const designs = LEGACY_TIERS.map(([id, name]) => ({ id, name, selection: { ...EMPTY_SELECTION, ...p.selections![id] }, removeWalls: true }))
+    return { designs, recommended: designs.some((d) => d.id === p.recommended) ? p.recommended : null }
+  }
+  return { designs: [newDesign([])], recommended: null }
 }

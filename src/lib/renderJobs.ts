@@ -24,6 +24,10 @@ export interface RenderRequest {
   /** Kitchen photo being restyled (the source may be that photo or an earlier rendering of it) */
   photoId: string
   source: Blob
+  /** Extra images sent after the source (e.g. the photo with the wall to remove marked in red) */
+  references?: Blob[]
+  /** This rendering shows walls removed */
+  wallsRemoved?: boolean
   prompt: string
   aspectRatio: string
   selection: Selection
@@ -71,7 +75,7 @@ export async function startRender(req: RenderRequest): Promise<void> {
   jobs.set(key, { status: 'running', startedAt: Date.now(), request: req })
   emit()
   try {
-    const result = await callRenderApi(req.source, req.prompt, req.aspectRatio, req.accessCode)
+    const result = await callRenderApi([req.source, ...(req.references ?? [])], req.prompt, req.aspectRatio, req.accessCode)
     const { blob, width, height } = await compressImage(result, 1600, 0.88)
     const version: RenderVersion = {
       id: newId(),
@@ -80,6 +84,7 @@ export async function startRender(req: RenderRequest): Promise<void> {
       selection: structuredClone(req.selection),
       label: req.label,
       sourcePhotoId: req.photoId,
+      wallsRemoved: req.wallsRemoved,
       parentId: req.parentId,
       width,
       height,
@@ -128,7 +133,7 @@ function base64ToBlob(b64: string, type: string): Blob {
   return new Blob([bytes], { type })
 }
 
-async function callRenderApi(source: Blob, prompt: string, aspectRatio: string, accessCode?: string): Promise<Blob> {
+async function callRenderApi(sources: Blob[], prompt: string, aspectRatio: string, accessCode?: string): Promise<Blob> {
   if (!navigator.onLine) throw new Error("This iPad is offline. Connect to Wi-Fi or a hotspot, then tap Retry.")
   const ctrl = new AbortController()
   const timer = window.setTimeout(() => ctrl.abort(), TIMEOUT_MS)
@@ -137,7 +142,11 @@ async function callRenderApi(source: Blob, prompt: string, aspectRatio: string, 
     res = await fetch('/api/render', {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(accessCode ? { 'x-access-code': accessCode } : {}) },
-      body: JSON.stringify({ image: await blobToBase64(source), mimeType: source.type || 'image/jpeg', prompt, aspectRatio }),
+      body: JSON.stringify({
+        images: await Promise.all(sources.map(async (b) => ({ data: await blobToBase64(b), mimeType: b.type || 'image/jpeg' }))),
+        prompt,
+        aspectRatio,
+      }),
       signal: ctrl.signal,
     })
   } catch (e) {

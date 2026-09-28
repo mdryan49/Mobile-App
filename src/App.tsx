@@ -7,7 +7,7 @@ import ScopeStep from './pages/ScopeStep'
 import EstimateStep from './pages/EstimateStep'
 import SettingsPage from './pages/SettingsPage'
 import RenderingsStep from './pages/RenderingsStep'
-import MixStep from './pages/MixStep'
+import DesignStep from './pages/DesignStep'
 import ProposalStep from './pages/ProposalStep'
 
 export default function App() {
@@ -20,9 +20,10 @@ export default function App() {
         <Route path="customer" element={<CustomerStep />} />
         <Route path="photos" element={<PhotosStep />} />
         <Route path="scope" element={<ScopeStep />} />
+        <Route path="design" element={<DesignStep />} />
         <Route path="estimate" element={<EstimateStep />} />
         <Route path="renderings" element={<RenderingsStep />} />
-        <Route path="mix" element={<MixStep />} />
+        <Route path="mix" element={<Navigate to="../design" replace />} />
         <Route path="proposal" element={<ProposalStep />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

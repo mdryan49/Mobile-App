@@ -11,12 +11,7 @@ function withDefaults(saved: Partial<AppSettings> | undefined): AppSettings {
     pin: saved?.pin ?? d.pin,
     renderAccessCode: saved?.renderAccessCode ?? d.renderAccessCode,
     salesperson: { ...d.salesperson, ...saved?.salesperson },
-    pricing: {
-      ...d.pricing,
-      ...saved?.pricing,
-      flooringPerSqft: { ...d.pricing.flooringPerSqft, ...saved?.pricing?.flooringPerSqft },
-      lighting: { ...d.pricing.lighting, ...saved?.pricing?.lighting },
-    },
+    pricing: { ...d.pricing, ...saved?.pricing },
   }
 }
 

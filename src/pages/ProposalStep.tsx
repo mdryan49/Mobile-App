@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button, SamplePricingBadge } from '../components/ui'
-import { TIER_LABELS } from '../config/catalog'
 import { PROPOSAL } from '../config/proposal'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { calculateEstimate, moneyRange } from '../lib/estimate'
-import { activeVersion, availableLooks, lookPricingTier, lookSelection } from '../lib/looks'
+import { activeVersion, availableLooks, lookName, lookSelection, lookWalls } from '../lib/looks'
 import type { ProposalResult } from '../lib/pdf'
 import { useSettings } from '../lib/settings'
 import type { PricingSettings } from '../config/defaultSettings'
@@ -23,8 +22,11 @@ export default function ProposalStep() {
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
 
-  const looks = availableLooks(project)
-  const recommended: LookKey = project.recommended && looks.includes(project.recommended) ? project.recommended : looks.includes('custom') ? 'custom' : 'better'
+  // Options with nothing picked are left off the proposal
+  const allLooks = availableLooks(project)
+  const looks = allLooks.filter((l) => !calculateEstimate(project.measurements, lookSelection(project, l), settings.pricing, lookWalls(project, l)).empty)
+  const emptyLooks = allLooks.filter((l) => !looks.includes(l))
+  const recommended: LookKey | undefined = project.recommended && looks.includes(project.recommended) ? project.recommended : looks[0]
   const missingRenders = looks.filter((l) => !activeVersion(project, l))
   const sp = settings.salesperson
   const missingSales = !sp.name || !sp.phone || !sp.email
@@ -34,14 +36,16 @@ export default function ProposalStep() {
     if (pdf) URL.revokeObjectURL(pdf.url)
   }, [pdf])
 
-  if (project.measurements.baseCabinetLf <= 0) {
+  if (project.measurements.baseCabinetLf <= 0 || !recommended) {
     return (
       <section>
         <h1 className="text-3xl font-bold">Proposal</h1>
         <div className="mt-6 rounded-2xl border-2 border-dashed border-neutral-200 px-6 py-16 text-center">
-          <p className="text-lg text-neutral-600">Enter measurements first so the proposal can be priced.</p>
-          <Button className="mt-4" onClick={() => navigate('../scope', { relative: 'path', replace: true })}>
-            Go to measurements
+          <p className="text-lg text-neutral-600">
+            {!recommended ? 'Pick products for at least one design option first.' : 'Enter measurements first so the proposal can be priced.'}
+          </p>
+          <Button className="mt-4" onClick={() => navigate(!recommended ? '../design' : '../scope', { relative: 'path', replace: true })}>
+            {!recommended ? 'Go to design options' : 'Go to measurements'}
           </Button>
         </div>
       </section>
@@ -56,7 +60,7 @@ export default function ProposalStep() {
       const { buildProposalPdf, proposalNumber } = await import('../lib/pdf') // loaded on demand (jsPDF is large)
       // Keep one proposal number per consultation, even when regenerated
       const number = project.proposal?.number ?? proposalNumber(project)
-      const result = await buildProposalPdf({ ...project, recommended }, settings, number)
+      const result = await buildProposalPdf({ ...project, recommended: recommended ?? null }, settings, number, looks)
       if (!project.proposal) update((p) => ({ ...p, proposal: { number, createdAt: Date.now() } }))
       setPdf({ ...result, url: URL.createObjectURL(result.blob), builtAt: Date.now() + 1000 })
     } catch (e) {
@@ -125,15 +129,15 @@ export default function ProposalStep() {
 
       <div>
         <h2 className="mb-3 text-xl font-bold">Which look do you recommend?</h2>
-        <div className={`grid gap-3 ${looks.length === 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'}`}>
+        <div className={`grid gap-3 ${looks.length === 1 ? 'max-w-sm grid-cols-1' : looks.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
           {looks.map((l) => (
             <RecommendCard key={l} project={project} pricing={settings.pricing} look={l} selected={l === recommended} onClick={() => update((p) => ({ ...p, recommended: l }))} />
           ))}
         </div>
-        <p className="mt-2 text-sm text-neutral-500">The recommended look gets the cover page and is listed first.</p>
+        <p className="mt-2 text-sm text-neutral-500">The recommended option gets the cover page and is listed first.</p>
       </div>
 
-      {(missingSales || missingRenders.length > 0) && (
+      {(missingSales || missingRenders.length > 0 || emptyLooks.length > 0) && (
         <div className="space-y-2 rounded-xl bg-amber-50 p-4 text-amber-900">
           {missingSales && (
             <p>
@@ -144,9 +148,14 @@ export default function ProposalStep() {
               so they print on the proposal.
             </p>
           )}
+          {emptyLooks.length > 0 && (
+            <p>
+              <strong>{emptyLooks.map((l) => lookName(project, l)).join(', ')}</strong> has no products picked, so it's left off the proposal.
+            </p>
+          )}
           {missingRenders.length > 0 && (
             <p>
-              <strong>No rendering yet for {missingRenders.map((l) => TIER_LABELS[l]).join(', ')}.</strong> The PDF will show an empty frame there.{' '}
+              <strong>No rendering yet for {missingRenders.map((l) => lookName(project, l)).join(', ')}.</strong> The PDF will show an empty frame there.{' '}
               <Link to="../renderings" relative="path" replace className="font-semibold text-accent underline">
                 Render now
               </Link>
@@ -208,7 +217,7 @@ export default function ProposalStep() {
 
 function RecommendCard({ project, pricing, look, selected, onClick }: { project: Project; pricing: PricingSettings; look: LookKey; selected: boolean; onClick: () => void }) {
   const url = usePhotoUrl(activeVersion(project, look)?.id ?? project.heroPhotoId)
-  const est = calculateEstimate(project.measurements, lookSelection(project, look), lookPricingTier(project, look), pricing)
+  const est = calculateEstimate(project.measurements, lookSelection(project, look), pricing, lookWalls(project, look))
   return (
     <button
       type="button"
@@ -221,7 +230,7 @@ function RecommendCard({ project, pricing, look, selected, onClick }: { project:
         {selected && <span className="absolute top-2 left-2 rounded-full bg-accent px-2.5 py-1 text-xs font-bold text-white">★ Recommended</span>}
       </div>
       <div className="p-3">
-        <div className="font-bold uppercase">{TIER_LABELS[look]}</div>
+        <div className="font-bold">{lookName(project, look)}</div>
         <div className="text-sm font-semibold text-accent">{moneyRange(est.low, est.high)}</div>
       </div>
     </button>

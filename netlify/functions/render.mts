@@ -3,7 +3,9 @@ import { GoogleGenAI } from '@google/genai'
 
 /**
  * POST /api/render
- * Body: { image: base64 JPEG/PNG, mimeType, prompt, aspectRatio }
+ * Body: { images: [{ data: base64, mimeType }], prompt, aspectRatio }
+ *   images[0] is the photo to edit; any others are references (e.g. the wall to remove marked in red).
+ *   The older { image, mimeType } shape is still accepted.
  * Returns: { image: base64, mimeType }
  *
  * The Gemini key lives ONLY in the Netlify environment variable GEMINI_API_KEY.
@@ -13,7 +15,8 @@ import { GoogleGenAI } from '@google/genai'
  */
 
 const DEFAULT_MODEL = 'gemini-3.1-flash-image'
-const MAX_IMAGE_BASE64 = 5_000_000 // ~3.7 MB image
+const MAX_TOTAL_BASE64 = 5_500_000 // ~4 MB of images in total (stays under the platform request limit)
+const MAX_IMAGES = 3
 const MAX_PROMPT = 6000
 const ASPECT_RATIOS = ['1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9', '21:9']
 
@@ -31,16 +34,19 @@ export default async (req: Request, _context: Context) => {
     return json(401, { error: 'Render access code is missing or wrong. Check Settings on this iPad.', code: 'bad_code' })
   }
 
-  let body: { image?: string; mimeType?: string; prompt?: string; aspectRatio?: string }
+  let body: { images?: { data?: string; mimeType?: string }[]; image?: string; mimeType?: string; prompt?: string; aspectRatio?: string }
   try {
     body = await req.json()
   } catch {
     return json(400, { error: 'Invalid request.' })
   }
-  const { image, prompt } = body
-  const mimeType = body.mimeType === 'image/png' ? 'image/png' : 'image/jpeg'
+  const { prompt } = body
+  const images = (body.images ?? (body.image ? [{ data: body.image, mimeType: body.mimeType }] : [])).slice(0, MAX_IMAGES)
   const aspectRatio = ASPECT_RATIOS.includes(body.aspectRatio ?? '') ? body.aspectRatio : undefined
-  if (!image || typeof image !== 'string' || image.length > MAX_IMAGE_BASE64) return json(400, { error: 'Photo is missing or too large.' })
+  const total = images.reduce((n, i) => n + (typeof i.data === 'string' ? i.data.length : 0), 0)
+  if (!images.length || images.some((i) => typeof i.data !== 'string' || !i.data) || total > MAX_TOTAL_BASE64) {
+    return json(400, { error: 'Photo is missing or too large.' })
+  }
   if (!prompt || typeof prompt !== 'string' || prompt.length > MAX_PROMPT) return json(400, { error: 'Prompt is missing or too long.' })
 
   const model = Netlify.env.get('GEMINI_IMAGE_MODEL') || DEFAULT_MODEL
@@ -50,7 +56,15 @@ export default async (req: Request, _context: Context) => {
   try {
     const res = await ai.models.generateContent({
       model,
-      contents: [{ role: 'user', parts: [{ inlineData: { mimeType, data: image } }, { text: prompt }] }],
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            ...images.map((i) => ({ inlineData: { mimeType: i.mimeType === 'image/png' ? 'image/png' : 'image/jpeg', data: i.data! } })),
+            { text: prompt },
+          ],
+        },
+      ],
       config: {
         responseModalities: ['IMAGE', 'TEXT'],
         imageConfig: { ...(aspectRatio ? { aspectRatio } : {}), imageSize: '1K' },

@@ -1,18 +1,26 @@
-import { TIERS, type Selection, type Tier } from '../config/catalog'
-import type { LookKey, Project, RenderVersion } from '../types'
+import type { Selection } from '../config/catalog'
+import type { Design, LookKey, Project, RenderVersion } from '../types'
 
-/** Good / Better / Best, plus Custom Mix once the salesperson starts one. */
+/** Design options, in order. (A "look" is a design option id.) */
 export function availableLooks(p: Project): LookKey[] {
-  return p.custom ? [...TIERS, 'custom'] : [...TIERS]
+  return p.designs.map((d) => d.id)
+}
+
+export function getDesign(p: Project, look: LookKey): Design | undefined {
+  return p.designs.find((d) => d.id === look)
+}
+
+export function lookName(p: Project, look: LookKey): string {
+  return getDesign(p, look)?.name ?? 'Design'
 }
 
 export function lookSelection(p: Project, look: LookKey): Selection {
-  return look === 'custom' ? p.custom!.selection : p.selections[look]
+  return getDesign(p, look)!.selection
 }
 
-/** Tier whose labor rates (flooring, lighting) price this look. */
-export function lookPricingTier(p: Project, look: LookKey): Tier {
-  return look === 'custom' ? p.custom!.baseTier : look
+/** Walls removed in this design option (only if the option includes them). */
+export function lookWalls(p: Project, look: LookKey) {
+  return getDesign(p, look)?.removeWalls ? p.walls : []
 }
 
 /** Key into project.activeRender. Every photo can have its own rendering per look. */

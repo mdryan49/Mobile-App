@@ -1,5 +1,3 @@
-import type { Tier } from './catalog'
-
 /**
  * Default pricing settings — SAMPLE DATA.
  * These are only the starting values. Everything here can be edited on the
@@ -33,10 +31,15 @@ export interface PricingSettings {
   electricalReconnect: number
   electricalUpdates: number
 
-  flooringPerSqft: Record<Tier, number>
   paintPerSqft: number
-  lighting: Record<Tier, number>
   permits: number
+
+  /** Non-load-bearing wall: base + per linear foot (demo, patch floor/ceiling, drywall) */
+  wallNonBearingBase: number
+  wallNonBearingPerLf: number
+  /** Load-bearing wall: base (engineer, permit, temporary shoring) + per linear foot (beam, posts) */
+  wallLoadBearingBase: number
+  wallLoadBearingPerLf: number
 }
 
 export interface Salesperson {
@@ -80,9 +83,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
     electricalReconnect: 400,
     electricalUpdates: 3200,
 
-    flooringPerSqft: { good: 9, better: 13, best: 18 },
     paintPerSqft: 3.5,
-    lighting: { good: 1200, better: 2200, best: 3800 },
     permits: 1200,
+
+    wallNonBearingBase: 1800,
+    wallNonBearingPerLf: 120,
+    wallLoadBearingBase: 6500,
+    wallLoadBearingPerLf: 450,
   },
 }

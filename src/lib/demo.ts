@@ -1,4 +1,5 @@
 import { putPhoto, saveProject } from './db'
+import { EMPTY_SELECTION } from '../config/catalog'
 import { applySuggestions, emptyProject } from './project'
 import { compressImage } from './image'
 import { newId } from './id'
@@ -48,13 +49,45 @@ export async function createDemoProject(): Promise<Project> {
     demoScope: 'cabinets-counters',
     movePlumbing: false,
     electricalUpdates: true,
-    newFlooring: true,
     flooringSqft: 260,
-    paintWalls: true,
     paintSqft: 340,
-    newLighting: true,
     permits: true,
   })
+  // Two sample options: a full replacement, and a budget refresh that keeps what's working
+  p.designs = [
+    {
+      id: newId(),
+      name: 'Option A: Bright White Remodel',
+      removeWalls: true,
+      selection: {
+        ...EMPTY_SELECTION,
+        cabinetLineId: 'diamond',
+        doorStyleId: 'shaker',
+        cabinetFinishId: 'white',
+        countertopId: 'si-calacatta-gold',
+        backsplashId: 'bs-zellige-white',
+        sinkFaucetId: 'kohler-better',
+        faucetFinishId: 'brass',
+        hardwareFinishId: 'brass',
+        paintId: 'sw-alabaster',
+        flooringId: 'fl-eng-white-oak',
+        lightingId: 'lt-recessed-ucl',
+      },
+    },
+    {
+      id: newId(),
+      name: 'Option B: Smart Refresh',
+      removeWalls: false,
+      selection: {
+        ...EMPTY_SELECTION,
+        cabinetFinishId: 'sage',
+        countertopId: 'si-miami-white',
+        hardwareFinishId: 'black',
+        paintId: 'sw-agreeable-gray',
+      },
+    },
+  ]
+  p.measurements.demoScope = 'cabinets-counters'
   for (let i = 1; i <= DEMO_PHOTO_COUNT; i++) {
     const { blob, width, height } = await compressImage(await fetchDemoPhoto(i))
     const id = newId()

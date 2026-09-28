@@ -3,7 +3,6 @@ import { PinPad } from '../components/PinPad'
 import { setStaffUnlocked, useStaffUnlocked } from '../lib/pinLock'
 import { useNavigate } from 'react-router-dom'
 import { Button, ConfirmDialog, Field, NumberInput, SamplePricingBadge, TextInput } from '../components/ui'
-import { TIER_LABELS, TIERS } from '../config/catalog'
 import { DEFAULT_SETTINGS, type AppSettings, type PricingSettings } from '../config/defaultSettings'
 import { useSettings } from '../lib/settings'
 
@@ -81,6 +80,15 @@ const SECTIONS: { title: string; fields: { key: NumKey; label: string; suffix: s
       { key: 'permits', label: 'Permits', suffix: '$' },
     ],
   },
+  {
+    title: 'Wall removal',
+    fields: [
+      { key: 'wallNonBearingBase', label: 'Non-load-bearing: per wall', suffix: '$', hint: 'Demo, patch floor & ceiling, drywall' },
+      { key: 'wallNonBearingPerLf', label: 'Non-load-bearing: per foot', suffix: '$/lf' },
+      { key: 'wallLoadBearingBase', label: 'Load-bearing: per wall', suffix: '$', hint: 'Engineer, permit, temporary shoring' },
+      { key: 'wallLoadBearingPerLf', label: 'Load-bearing: per foot', suffix: '$/lf', hint: 'Beam & posts. Unverified walls use this rate.' },
+    ],
+  },
 ]
 
 function SettingsForm() {
@@ -142,24 +150,6 @@ function SettingsForm() {
             {sec.fields.map((f) => (
               <Field key={f.key} label={f.label} hint={f.hint}>
                 <NumberInput value={draft.pricing[f.key]} onChange={(n) => setPricing({ [f.key]: n })} suffix={f.suffix} step={0.1} />
-              </Field>
-            ))}
-          </div>
-        </section>
-      ))}
-
-      {(['flooringPerSqft', 'lighting'] as const).map((key) => (
-        <section key={key} className="space-y-4">
-          <h3 className="text-xl font-bold">{key === 'flooringPerSqft' ? 'Flooring (installed, per sq ft)' : 'Lighting package'}</h3>
-          <div className="grid gap-5 md:grid-cols-3">
-            {TIERS.map((t) => (
-              <Field key={t} label={TIER_LABELS[t]}>
-                <NumberInput
-                  value={draft.pricing[key][t]}
-                  onChange={(n) => setPricing({ [key]: { ...draft.pricing[key], [t]: n } })}
-                  suffix={key === 'flooringPerSqft' ? '$/sqft' : '$'}
-                  step={0.1}
-                />
               </Field>
             ))}
           </div>

@@ -4,8 +4,9 @@ import { useStaffUnlocked } from '../lib/pinLock'
 import { useNavigate } from 'react-router-dom'
 import { Swatch } from '../components/Swatch'
 import { Button, SamplePricingBadge } from '../components/ui'
-import { TIER_LABELS, resolveSelection } from '../config/catalog'
-import { availableLooks, lookPricingTier, lookSelection } from '../lib/looks'
+import type { Selection } from '../config/catalog'
+import { availableLooks, lookName, lookSelection, lookWalls } from '../lib/looks'
+import { materialRows } from '../lib/materials'
 import type { LookKey } from '../types'
 import { calculateEstimate, groupEstimate, GROUPS, LINE_LABELS, money, moneyRange, type Estimate, type EstimateGroup, type GroupKey, type LineKey } from '../lib/estimate'
 import { useSettings } from '../lib/settings'
@@ -24,7 +25,7 @@ export default function EstimateStep() {
   const estimates = useMemo(
     () =>
       Object.fromEntries(
-        availableLooks(project).map((l) => [l, calculateEstimate(m, lookSelection(project, l), lookPricingTier(project, l), settings.pricing)]),
+        availableLooks(project).map((l) => [l, calculateEstimate(m, lookSelection(project, l), settings.pricing, lookWalls(project, l))]),
       ) as Record<LookKey, Estimate>,
     [project, m, settings.pricing],
   )
@@ -44,10 +45,12 @@ export default function EstimateStep() {
   }
 
   const detailed = staffView && staffUnlocked
-  const lineKeys = estimates.good.lines.map((l) => l.key)
+  // Every line/category that appears in any option, in standard order
+  const lineKeys = (Object.keys(LINE_LABELS) as LineKey[]).filter((k) => looks.some((t) => estimates[t].lines.some((l) => l.key === k)))
   const amountOf = (t: LookKey, k: LineKey) => estimates[t].lines.find((l) => l.key === k)
   const groups = Object.fromEntries(looks.map((t) => [t, groupEstimate(estimates[t], lookSelection(project, t))])) as Record<LookKey, EstimateGroup[]>
-  const groupKeys = GROUPS.map((g) => g.key).filter((k) => groups.good.some((g) => g.key === k))
+  const groupKeys = GROUPS.map((g) => g.key).filter((k) => looks.some((t) => groups[t].some((g) => g.key === k)))
+  const highlight = (t: LookKey) => (t === project.recommended ? 'bg-accent/5' : '')
   const groupOf = (t: LookKey, k: GroupKey) => groups[t].find((g) => g.key === k)
 
   const rows: { key: string; label: string; cell: (t: LookKey) => { amount: number; detail: string } | undefined }[] = detailed
@@ -66,7 +69,7 @@ export default function EstimateStep() {
         <div>
           <h1 className="text-3xl font-bold">Your estimate</h1>
           <p className="mt-1 text-neutral-600">
-            {looks.length === 4 ? 'Three packages plus your custom mix.' : 'Three ways to get the kitchen you want.'} Final price confirmed after a site measure.
+            {looks.length === 1 ? 'Your design option, priced.' : `${looks.length} design options, side by side.`} Final price confirmed after a site measure.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -85,17 +88,23 @@ export default function EstimateStep() {
       <div className="mt-6 overflow-hidden rounded-2xl border-2 border-neutral-100">
         <table className="w-full table-fixed border-collapse text-left">
           <colgroup>
-            <col className={looks.length === 4 ? 'w-[20%]' : 'w-[28%]'} />
-            <col />
-            <col />
-            <col />
+            <col className={looks.length === 1 ? 'w-[40%]' : 'w-[28%]'} />
+            {looks.map((t) => (
+              <col key={t} />
+            ))}
           </colgroup>
           <thead>
             <tr>
-              <th className="p-4 align-bottom text-sm font-semibold text-neutral-500 uppercase">Package</th>
+              <th className="p-4 align-bottom text-sm font-semibold text-neutral-500 uppercase">Option</th>
               {looks.map((t) => (
-                <th key={t} className={`p-4 align-top ${t === 'better' ? 'bg-accent/5' : t === 'custom' ? 'bg-amber-50' : ''}`}>
-                  <TierHeader tier={t} estimate={estimates[t]} selection={lookSelection(project, t)} compact={looks.length === 4} />
+                <th key={t} className={`p-4 align-top ${highlight(t)}`}>
+                  <OptionHeader
+                    name={lookName(project, t)}
+                    recommended={t === project.recommended}
+                    estimate={estimates[t]}
+                    selection={lookSelection(project, t)}
+                    onEdit={() => navigate('../design', { relative: 'path', replace: true })}
+                  />
                 </th>
               ))}
             </tr>
@@ -107,7 +116,7 @@ export default function EstimateStep() {
                 {looks.map((t) => {
                   const line = row.cell(t)
                   return (
-                    <td key={t} className={`p-4 align-top ${t === 'better' ? 'bg-accent/5' : t === 'custom' ? 'bg-amber-50' : ''}`}>
+                    <td key={t} className={`p-4 align-top ${highlight(t)}`}>
                       <div className="text-[17px] font-semibold tabular-nums">{line ? money(line.amount) : '—'}</div>
                       {line?.detail && <div className="mt-0.5 text-[13px] leading-snug text-neutral-500">{line.detail}</div>}
                     </td>
@@ -120,9 +129,9 @@ export default function EstimateStep() {
             <tr className="border-t-2 border-black">
               <td className="p-4 text-lg font-bold">Estimated investment</td>
               {looks.map((t) => (
-                <td key={t} className={`p-4 ${t === 'better' ? 'bg-accent/5' : t === 'custom' ? 'bg-amber-50' : ''}`}>
+                <td key={t} className={`p-4 ${highlight(t)}`}>
                   <div className="text-xl leading-tight font-bold text-accent tabular-nums">
-                    {moneyRange(estimates[t].low, estimates[t].high)}
+                    {estimates[t].empty ? '-' : moneyRange(estimates[t].low, estimates[t].high)}
                   </div>
                 </td>
               ))}
@@ -146,25 +155,44 @@ export default function EstimateStep() {
   )
 }
 
-function TierHeader({ tier, estimate, selection, compact }: { tier: LookKey; estimate: Estimate; selection: Parameters<typeof resolveSelection>[0]; compact: boolean }) {
-  const r = resolveSelection(selection)
+function OptionHeader({
+  name,
+  recommended,
+  estimate,
+  selection,
+  onEdit,
+}: {
+  name: string
+  recommended: boolean
+  estimate: Estimate
+  selection: Selection
+  onEdit: () => void
+}) {
+  const chosen = materialRows(selection, { hideKept: true })
   return (
     <div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className={`${compact ? 'text-xl' : 'text-2xl'} leading-tight font-bold tracking-wide uppercase`}>{TIER_LABELS[tier]}</span>
-        {tier === 'better' && <span className="rounded bg-accent px-2 py-0.5 text-[11px] font-bold whitespace-nowrap text-white uppercase">Most popular</span>}
+        <span className="text-xl leading-tight font-bold">{name}</span>
+        {recommended && <span className="rounded bg-accent px-2 py-0.5 text-[11px] font-bold whitespace-nowrap text-white uppercase">Recommended</span>}
       </div>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        <Swatch swatch={r.cabinetFinish.swatch} className={compact ? "h-6 w-6" : "h-8 w-8"} />
-        <Swatch swatch={r.countertop.swatch} className={compact ? "h-6 w-6" : "h-8 w-8"} />
-        <Swatch swatch={r.backsplash.swatch} className={compact ? "h-6 w-6" : "h-8 w-8"} />
-        <Swatch swatch={r.hardwareFinish.swatch} className={compact ? "h-6 w-6" : "h-8 w-8"} />
-      </div>
-      <div className="mt-2 text-[13px] leading-snug font-normal text-neutral-600">
-        {r.cabinetLine.name} {r.doorStyle.name.toLowerCase()} in {r.cabinetFinish.name.toLowerCase()}, {r.countertop.brand}{' '}
-        {r.countertop.name}
-      </div>
-      <div className="mt-2 text-lg font-bold text-accent tabular-nums">{moneyRange(estimate.low, estimate.high)}</div>
+      {chosen.length === 0 ? (
+        <button type="button" onClick={onEdit} className="mt-2 text-left text-[15px] font-semibold text-accent">
+          Nothing picked yet. Choose products →
+        </button>
+      ) : (
+        <>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {chosen.filter((r) => r.swatch).slice(0, 6).map((r) => (
+              <Swatch key={r.label} swatch={r.swatch!} className="h-7 w-7" />
+            ))}
+          </div>
+          <div className="mt-2 text-[13px] leading-snug font-normal text-neutral-600">
+            {chosen.slice(0, 2).map((r) => r.text).join('; ')}
+            {chosen.length > 2 ? ` + ${chosen.length - 2} more` : ''}
+          </div>
+          <div className="mt-2 text-lg font-bold text-accent tabular-nums">{moneyRange(estimate.low, estimate.high)}</div>
+        </>
+      )}
     </div>
   )
 }

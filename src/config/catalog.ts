@@ -1,20 +1,26 @@
 /**
  * MATERIALS CATALOG — SAMPLE DATA ONLY.
  * Brand names are placeholders for demonstration; all prices are sample prices.
- * Edit this file to change products, prices, or swatches. No other code changes needed.
+ * Edit this file to change products, prices, suppliers or swatches. No other code changes needed.
+ *
+ * Only list products your suppliers can actually deliver. Set `available: false` to hide
+ * an item from the pickers without deleting it (e.g. backordered or discontinued).
  *
  * Units:  lf = linear foot · sqft = square foot · each = per piece · pkg = package
  * Swatch: `color` is the main color; `accent` + `pattern` add speckle/veining/wood grain.
  */
 
-export type Tier = 'good' | 'better' | 'best'
-export const TIERS: Tier[] = ['good', 'better', 'best']
-export const TIER_LABELS: Record<Tier | 'custom', string> = {
-  good: 'Good',
-  better: 'Better',
-  best: 'Best',
-  custom: 'Custom Mix',
-}
+/** Who you buy each product from. Rename these to your real suppliers. */
+export const SUPPLIERS = {
+  cabinets: 'Cabinet supplier (MasterBrand dealer)',
+  stone: 'Countertop fabricator',
+  tile: 'Arizona Tile',
+  plumbing: 'Plumbing supplier (Kohler)',
+  hardware: 'Hardware supplier',
+  paint: 'Paint store',
+  flooring: 'Flooring supplier',
+  lighting: 'Lighting & electrical supplier',
+} as const
 
 export type SwatchPattern = 'solid' | 'speckle' | 'veined' | 'wood' | 'tile' | 'metal'
 export interface Swatch {
@@ -27,7 +33,9 @@ interface BaseItem {
   id: string
   name: string
   brand: string
-  tier: Tier
+  supplier: string
+  /** false hides it from the pickers (backordered, discontinued...) */
+  available?: boolean
   swatch: Swatch
 }
 
@@ -44,17 +52,17 @@ export interface CabinetLine extends BaseItem {
 
 export const CABINET_LINES: CabinetLine[] = [
   {
-    id: 'aristokraft', name: 'Aristokraft', brand: 'MasterBrand Cabinets', tier: 'good', unit: 'lf',
+    id: 'aristokraft', name: 'Aristokraft', brand: 'MasterBrand Cabinets', supplier: SUPPLIERS.cabinets, unit: 'lf',
     baseCostPerLf: 260, wallCostPerLf: 190, description: 'Framed, value line',
     swatch: { color: '#d9d4cc' },
   },
   {
-    id: 'diamond', name: 'Diamond', brand: 'MasterBrand Cabinets', tier: 'better', unit: 'lf',
+    id: 'diamond', name: 'Diamond', brand: 'MasterBrand Cabinets', supplier: SUPPLIERS.cabinets, unit: 'lf',
     baseCostPerLf: 380, wallCostPerLf: 280, description: 'Semi-custom, soft-close, more sizes',
     swatch: { color: '#cfc8bd' },
   },
   {
-    id: 'decora', name: 'Decorá', brand: 'MasterBrand Cabinets', tier: 'best', unit: 'lf',
+    id: 'decora', name: 'Decorá', brand: 'MasterBrand Cabinets', supplier: SUPPLIERS.cabinets, unit: 'lf',
     baseCostPerLf: 560, wallCostPerLf: 410, description: 'Custom-grade, all plywood, premium finishes',
     swatch: { color: '#c4bcae' },
   },
@@ -104,11 +112,11 @@ export interface Countertop extends BaseItem {
 }
 
 const granite = (id: string, name: string, cost: number, swatch: Swatch): Countertop =>
-  ({ id, name, brand: 'Arizona Tile', material: 'Granite', tier: 'good', unit: 'sqft', installedCostPerSqft: cost, swatch })
+  ({ id, name, brand: 'Arizona Tile', supplier: SUPPLIERS.stone, material: 'Granite', unit: 'sqft', installedCostPerSqft: cost, swatch })
 const silestone = (id: string, name: string, cost: number, swatch: Swatch): Countertop =>
-  ({ id, name, brand: 'Silestone', material: 'Quartz', tier: 'better', unit: 'sqft', installedCostPerSqft: cost, swatch })
+  ({ id, name, brand: 'Silestone', supplier: SUPPLIERS.stone, material: 'Quartz', unit: 'sqft', installedCostPerSqft: cost, swatch })
 const cambria = (id: string, name: string, cost: number, swatch: Swatch): Countertop =>
-  ({ id, name, brand: 'Cambria', material: 'Quartz', tier: 'best', unit: 'sqft', installedCostPerSqft: cost, swatch })
+  ({ id, name, brand: 'Cambria', supplier: SUPPLIERS.stone, material: 'Quartz', unit: 'sqft', installedCostPerSqft: cost, swatch })
 
 export const COUNTERTOPS: Countertop[] = [
   granite('az-luna-pearl', 'Luna Pearl', 55, { color: '#d8d4cf', accent: '#5b5753', pattern: 'speckle' }),
@@ -161,13 +169,13 @@ export interface BacksplashTile extends BaseItem {
 }
 
 export const BACKSPLASHES: BacksplashTile[] = [
-  { id: 'bs-subway-white', name: 'White Gloss Subway 3x6', style: 'Subway', brand: 'Arizona Tile', tier: 'good', unit: 'sqft', materialCostPerSqft: 6, swatch: { color: '#f7f7f5', accent: '#d9d9d6', pattern: 'tile' }, promptText: 'classic white glossy 3x6 subway tile in a running bond pattern' },
-  { id: 'bs-subway-gray', name: 'Dove Gray Subway 3x12', style: 'Subway', brand: 'Arizona Tile', tier: 'good', unit: 'sqft', materialCostPerSqft: 8, swatch: { color: '#c6c5c1', accent: '#a9a8a4', pattern: 'tile' }, promptText: 'soft dove gray 3x12 subway tile in a stacked pattern' },
-  { id: 'bs-zellige-white', name: 'Zellige-look Blanco', style: 'Zellige-look', brand: 'Arizona Tile', tier: 'better', unit: 'sqft', materialCostPerSqft: 18, swatch: { color: '#f1ede4', accent: '#d8d0bf', pattern: 'tile' }, promptText: 'handmade-look glossy white zellige tile with subtle variation' },
-  { id: 'bs-zellige-sage', name: 'Zellige-look Sage', style: 'Zellige-look', brand: 'Arizona Tile', tier: 'better', unit: 'sqft', materialCostPerSqft: 20, swatch: { color: '#a9b5a0', accent: '#8e9c85', pattern: 'tile' }, promptText: 'handmade-look glossy sage green zellige tile' },
-  { id: 'bs-zellige-navy', name: 'Zellige-look Navy', style: 'Zellige-look', brand: 'Arizona Tile', tier: 'better', unit: 'sqft', materialCostPerSqft: 20, swatch: { color: '#2d3d5c', accent: '#1f2b44', pattern: 'tile' }, promptText: 'handmade-look glossy navy blue zellige tile' },
-  { id: 'bs-lf-calacatta', name: 'Calacatta Porcelain 24x48', style: 'Large Format', brand: 'Arizona Tile', tier: 'best', unit: 'sqft', materialCostPerSqft: 26, swatch: { color: '#f3f0ea', accent: '#b3a58c', pattern: 'veined' }, promptText: 'large-format 24x48 calacatta-look white marble porcelain with soft gold veining, minimal grout lines' },
-  { id: 'bs-lf-concrete', name: 'Concrete Porcelain 24x48', style: 'Large Format', brand: 'Arizona Tile', tier: 'best', unit: 'sqft', materialCostPerSqft: 22, swatch: { color: '#a3a19c', accent: '#8a8883', pattern: 'speckle' }, promptText: 'large-format 24x48 light concrete-look porcelain tile, minimal grout lines' },
+  { id: 'bs-subway-white', name: 'White Gloss Subway 3x6', style: 'Subway', brand: 'Arizona Tile', supplier: SUPPLIERS.tile, unit: 'sqft', materialCostPerSqft: 6, swatch: { color: '#f7f7f5', accent: '#d9d9d6', pattern: 'tile' }, promptText: 'classic white glossy 3x6 subway tile in a running bond pattern' },
+  { id: 'bs-subway-gray', name: 'Dove Gray Subway 3x12', style: 'Subway', brand: 'Arizona Tile', supplier: SUPPLIERS.tile, unit: 'sqft', materialCostPerSqft: 8, swatch: { color: '#c6c5c1', accent: '#a9a8a4', pattern: 'tile' }, promptText: 'soft dove gray 3x12 subway tile in a stacked pattern' },
+  { id: 'bs-zellige-white', name: 'Zellige-look Blanco', style: 'Zellige-look', brand: 'Arizona Tile', supplier: SUPPLIERS.tile, unit: 'sqft', materialCostPerSqft: 18, swatch: { color: '#f1ede4', accent: '#d8d0bf', pattern: 'tile' }, promptText: 'handmade-look glossy white zellige tile with subtle variation' },
+  { id: 'bs-zellige-sage', name: 'Zellige-look Sage', style: 'Zellige-look', brand: 'Arizona Tile', supplier: SUPPLIERS.tile, unit: 'sqft', materialCostPerSqft: 20, swatch: { color: '#a9b5a0', accent: '#8e9c85', pattern: 'tile' }, promptText: 'handmade-look glossy sage green zellige tile' },
+  { id: 'bs-zellige-navy', name: 'Zellige-look Navy', style: 'Zellige-look', brand: 'Arizona Tile', supplier: SUPPLIERS.tile, unit: 'sqft', materialCostPerSqft: 20, swatch: { color: '#2d3d5c', accent: '#1f2b44', pattern: 'tile' }, promptText: 'handmade-look glossy navy blue zellige tile' },
+  { id: 'bs-lf-calacatta', name: 'Calacatta Porcelain 24x48', style: 'Large Format', brand: 'Arizona Tile', supplier: SUPPLIERS.tile, unit: 'sqft', materialCostPerSqft: 26, swatch: { color: '#f3f0ea', accent: '#b3a58c', pattern: 'veined' }, promptText: 'large-format 24x48 calacatta-look white marble porcelain with soft gold veining, minimal grout lines' },
+  { id: 'bs-lf-concrete', name: 'Concrete Porcelain 24x48', style: 'Large Format', brand: 'Arizona Tile', supplier: SUPPLIERS.tile, unit: 'sqft', materialCostPerSqft: 22, swatch: { color: '#a3a19c', accent: '#8a8883', pattern: 'speckle' }, promptText: 'large-format 24x48 light concrete-look porcelain tile, minimal grout lines' },
 ]
 
 // ---------------- Sinks & faucets (Kohler, per package) ----------------
@@ -181,9 +189,9 @@ export interface SinkFaucetPackage extends BaseItem {
 }
 
 export const SINK_FAUCETS: SinkFaucetPackage[] = [
-  { id: 'kohler-good', name: 'Verse sink + Simplice faucet', brand: 'Kohler', tier: 'good', unit: 'pkg', sink: 'Verse undermount stainless steel', faucet: 'Simplice pull-down', cost: 650, swatch: { color: '#b9bcbf', pattern: 'metal' }, promptText: 'an undermount stainless sink with a simple pull-down faucet' },
-  { id: 'kohler-better', name: 'Prolific workstation + Crue faucet', brand: 'Kohler', tier: 'better', unit: 'pkg', sink: 'Prolific stainless workstation', faucet: 'Crue semi-professional', cost: 1250, swatch: { color: '#a9adb1', pattern: 'metal' }, promptText: 'a stainless workstation sink with a semi-professional coil-spring faucet' },
-  { id: 'kohler-best', name: 'Whitehaven farmhouse + Artifacts faucet', brand: 'Kohler', tier: 'best', unit: 'pkg', sink: 'Whitehaven cast-iron farmhouse', faucet: 'Artifacts bridge', cost: 2400, swatch: { color: '#f2f1ec' }, promptText: 'a white cast-iron farmhouse apron-front sink with a vintage bridge faucet' },
+  { id: 'kohler-good', name: 'Verse sink + Simplice faucet', brand: 'Kohler', supplier: SUPPLIERS.plumbing, unit: 'pkg', sink: 'Verse undermount stainless steel', faucet: 'Simplice pull-down', cost: 650, swatch: { color: '#b9bcbf', pattern: 'metal' }, promptText: 'an undermount stainless sink with a simple pull-down faucet' },
+  { id: 'kohler-better', name: 'Prolific workstation + Crue faucet', brand: 'Kohler', supplier: SUPPLIERS.plumbing, unit: 'pkg', sink: 'Prolific stainless workstation', faucet: 'Crue semi-professional', cost: 1250, swatch: { color: '#a9adb1', pattern: 'metal' }, promptText: 'a stainless workstation sink with a semi-professional coil-spring faucet' },
+  { id: 'kohler-best', name: 'Whitehaven farmhouse + Artifacts faucet', brand: 'Kohler', supplier: SUPPLIERS.plumbing, unit: 'pkg', sink: 'Whitehaven cast-iron farmhouse', faucet: 'Artifacts bridge', cost: 2400, swatch: { color: '#f2f1ec' }, promptText: 'a white cast-iron farmhouse apron-front sink with a vintage bridge faucet' },
 ]
 
 // ---------------- Metal finishes (faucets & cabinet hardware) ----------------
@@ -244,56 +252,91 @@ export const PAINT_COLORS: PaintColor[] = [
   { id: 'bm-edgecomb-gray', name: 'Edgecomb Gray', brand: 'Benjamin Moore', code: 'HC-173', swatch: { color: '#d8d0c3' } },
 ]
 
-// ---------------- Default look for each tier ----------------
+// ---------------- Flooring (priced per sq ft INSTALLED) ----------------
 
-export interface Selection {
-  cabinetLineId: string
-  doorStyleId: string
-  cabinetFinishId: string
-  countertopId: string
-  backsplashId: string
-  sinkFaucetId: string
-  faucetFinishId: string
-  hardwareFinishId: string
-  paintId: string
+export interface Flooring extends BaseItem {
+  unit: 'sqft'
+  installedCostPerSqft: number
+  promptText: string
 }
 
-export const TIER_DEFAULTS: Record<Tier, Selection> = {
-  good: {
-    cabinetLineId: 'aristokraft', doorStyleId: 'shaker', cabinetFinishId: 'white',
-    countertopId: 'az-luna-pearl', backsplashId: 'bs-subway-white',
-    sinkFaucetId: 'kohler-good', faucetFinishId: 'chrome', hardwareFinishId: 'nickel',
-    paintId: 'sw-agreeable-gray',
-  },
-  better: {
-    cabinetLineId: 'diamond', doorStyleId: 'shaker', cabinetFinishId: 'sage',
-    countertopId: 'si-calacatta-gold', backsplashId: 'bs-zellige-white',
-    sinkFaucetId: 'kohler-better', faucetFinishId: 'black', hardwareFinishId: 'black',
-    paintId: 'sw-alabaster',
-  },
-  best: {
-    cabinetLineId: 'decora', doorStyleId: 'slab', cabinetFinishId: 'navy',
-    countertopId: 'ca-brittanicca', backsplashId: 'bs-lf-calacatta',
-    sinkFaucetId: 'kohler-best', faucetFinishId: 'brass', hardwareFinishId: 'brass',
-    paintId: 'bm-chantilly-lace',
-  },
+export const FLOORING: Flooring[] = [
+  { id: 'fl-lvp-oak', name: 'Natural Oak LVP', brand: 'Luxury vinyl plank', supplier: SUPPLIERS.flooring, unit: 'sqft', installedCostPerSqft: 7, swatch: { color: '#c9a77c', accent: '#a8845a', pattern: 'wood' }, promptText: 'natural light oak luxury vinyl plank flooring' },
+  { id: 'fl-lvp-walnut', name: 'Smoked Walnut LVP', brand: 'Luxury vinyl plank', supplier: SUPPLIERS.flooring, unit: 'sqft', installedCostPerSqft: 7.5, swatch: { color: '#6b4b34', accent: '#523624', pattern: 'wood' }, promptText: 'warm dark walnut luxury vinyl plank flooring' },
+  { id: 'fl-eng-white-oak', name: 'White Oak Engineered', brand: 'Engineered hardwood', supplier: SUPPLIERS.flooring, unit: 'sqft', installedCostPerSqft: 12, swatch: { color: '#d2b48c', accent: '#b8966a', pattern: 'wood' }, promptText: 'wide-plank white oak engineered hardwood flooring, matte finish' },
+  { id: 'fl-porc-stone', name: 'Stone-look Porcelain 12x24', brand: 'Arizona Tile', supplier: SUPPLIERS.tile, unit: 'sqft', installedCostPerSqft: 14, swatch: { color: '#bdb8ae', accent: '#9e998f', pattern: 'tile' }, promptText: 'large 12x24 warm gray stone-look porcelain floor tile' },
+]
+
+// ---------------- Lighting packages (installed) ----------------
+
+export interface LightingPackage extends BaseItem {
+  unit: 'pkg'
+  cost: number
+  description: string
+}
+
+export const LIGHTING: LightingPackage[] = [
+  { id: 'lt-recessed', name: 'Recessed LED package', brand: 'LED', supplier: SUPPLIERS.lighting, unit: 'pkg', cost: 1200, description: '6 recessed LED cans', swatch: { color: '#f4f1e8' } },
+  { id: 'lt-recessed-ucl', name: 'Recessed + under-cabinet', brand: 'LED', supplier: SUPPLIERS.lighting, unit: 'pkg', cost: 2200, description: 'Recessed cans plus LED under-cabinet strips', swatch: { color: '#f7e9c7' } },
+  { id: 'lt-full', name: 'Full lighting package', brand: 'LED', supplier: SUPPLIERS.lighting, unit: 'pkg', cost: 3800, description: 'Recessed, under-cabinet and 3 island pendants', swatch: { color: '#e9d39c' } },
+]
+
+// ---------------- A design option: one product per category ----------------
+
+/**
+ * What a design option uses. `null` means "keep existing / not in this design":
+ * it costs nothing and the AI leaves that part of the kitchen as it is.
+ * Choosing a cabinet color with no cabinet line = refinish/paint the existing cabinets.
+ */
+export interface Selection {
+  cabinetLineId: string | null
+  doorStyleId: string | null
+  cabinetFinishId: string | null
+  countertopId: string | null
+  backsplashId: string | null
+  sinkFaucetId: string | null
+  faucetFinishId: string | null
+  hardwareFinishId: string | null
+  paintId: string | null
+  flooringId: string | null
+  lightingId: string | null
+}
+
+export const EMPTY_SELECTION: Selection = {
+  cabinetLineId: null,
+  doorStyleId: null,
+  cabinetFinishId: null,
+  countertopId: null,
+  backsplashId: null,
+  sinkFaucetId: null,
+  faucetFinishId: null,
+  hardwareFinishId: null,
+  paintId: null,
+  flooringId: null,
+  lightingId: null,
 }
 
 // ---------------- Lookup helpers ----------------
 
-const byId = <T extends { id: string }>(list: T[], id: string, fallback: T) => list.find((x) => x.id === id) ?? fallback
+const find = <T extends { id: string }>(list: T[], id: string | null) => (id ? list.find((x) => x.id === id) : undefined)
 
+/** Catalog items for a selection; anything not chosen is undefined ("keep existing"). */
 export function resolveSelection(s: Selection) {
   return {
-    cabinetLine: byId(CABINET_LINES, s.cabinetLineId, CABINET_LINES[0]),
-    doorStyle: byId(DOOR_STYLES, s.doorStyleId, DOOR_STYLES[0]),
-    cabinetFinish: byId(CABINET_FINISHES, s.cabinetFinishId, CABINET_FINISHES[0]),
-    countertop: byId(COUNTERTOPS, s.countertopId, COUNTERTOPS[0]),
-    backsplash: byId(BACKSPLASHES, s.backsplashId, BACKSPLASHES[0]),
-    sinkFaucet: byId(SINK_FAUCETS, s.sinkFaucetId, SINK_FAUCETS[0]),
-    faucetFinish: byId(METAL_FINISHES, s.faucetFinishId, METAL_FINISHES[0]),
-    hardwareFinish: byId(METAL_FINISHES, s.hardwareFinishId, METAL_FINISHES[0]),
-    paint: byId(PAINT_COLORS, s.paintId, PAINT_COLORS[0]),
+    cabinetLine: find(CABINET_LINES, s.cabinetLineId),
+    doorStyle: find(DOOR_STYLES, s.doorStyleId),
+    cabinetFinish: find(CABINET_FINISHES, s.cabinetFinishId),
+    countertop: find(COUNTERTOPS, s.countertopId),
+    backsplash: find(BACKSPLASHES, s.backsplashId),
+    sinkFaucet: find(SINK_FAUCETS, s.sinkFaucetId),
+    faucetFinish: find(METAL_FINISHES, s.faucetFinishId),
+    hardwareFinish: find(METAL_FINISHES, s.hardwareFinishId),
+    paint: find(PAINT_COLORS, s.paintId),
+    flooring: find(FLOORING, s.flooringId),
+    lighting: find(LIGHTING, s.lightingId),
   }
 }
 export type ResolvedSelection = ReturnType<typeof resolveSelection>
+
+/** Only products marked available show up in the pickers. */
+export const isAvailable = (item: { available?: boolean }) => item.available !== false

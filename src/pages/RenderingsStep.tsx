@@ -5,13 +5,13 @@ import { LookMaterials } from '../components/LookMaterials'
 import { RenderError, RenderingOverlay } from '../components/RenderStatus'
 import { Button, Toggle } from '../components/ui'
 import { VersionStrip } from '../components/VersionStrip'
-import { TIER_LABELS, TIERS } from '../config/catalog'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { useRenderJobs } from '../hooks/useRenderJobs'
-import { getPhotoBlob } from '../lib/db'
-import { activeVersion, availableLooks, lookSelection, rendersFor, withActive } from '../lib/looks'
-import { CHANGE_LABELS, changesPrompt, fullRenderPrompt, nearestAspectRatio, pendingChanges } from '../lib/prompt'
-import { jobKey, startRender, type JobState } from '../lib/renderJobs'
+import { activeVersion, availableLooks, lookName, lookSelection, rendersFor, withActive } from '../lib/looks'
+import { CHANGE_LABELS } from '../lib/prompt'
+import { planRender, renderDesign, wallsOnPhoto } from '../lib/renderActions'
+import { jobKey, type JobState } from '../lib/renderJobs'
+import { ConceptBadge } from './DesignStep'
 import { useSettings } from '../lib/settings'
 import type { LookKey, PhotoRef, Project } from '../types'
 import { useProjectContext } from './ProjectLayout'
@@ -21,12 +21,12 @@ export default function RenderingsStep() {
   const { settings } = useSettings()
   const navigate = useNavigate()
   const jobs = useRenderJobs()
-  const [look, setLook] = useState<LookKey>('better')
+  const [look, setLook] = useState<LookKey | null>(null)
   const [photoSel, setPhotoSel] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const looks = availableLooks(project)
-  const current: LookKey = looks.includes(look) ? look : 'better'
+  const current: LookKey = look && looks.includes(look) ? look : looks[0]
   // Default to the hero photo; fall back if the chosen photo was removed
   const photo = project.photos.find((p) => p.id === photoSel) ?? project.photos.find((p) => p.id === project.heroPhotoId)
   const photoUrl = usePhotoUrl(photo?.id)
@@ -34,7 +34,8 @@ export default function RenderingsStep() {
   const activeUrl = usePhotoUrl(active?.id)
   const job = photo ? jobs.get(jobKey(project.id, current, photo.id)) : undefined
   const selection = lookSelection(project, current)
-  const pending = active ? pendingChanges(active.selection, selection) : []
+  const plan = photo ? planRender(project, current, photo.id) : null
+  const pending = plan?.pending ?? []
 
   if (!photo) {
     return (
@@ -51,44 +52,16 @@ export default function RenderingsStep() {
   }
 
   const ph = photo
-  const common = (l: LookKey) => ({
-    projectId: project.id,
-    look: l,
-    photoId: ph.id,
-    aspectRatio: nearestAspectRatio(ph.width, ph.height),
-    selection: lookSelection(project, l),
-    accessCode: settings.renderAccessCode || undefined,
-  })
+  const accessCode = settings.renderAccessCode || undefined
 
-  /** Full restyle from the original photo. */
-  async function render(l: LookKey) {
-    setError(null)
-    const source = await getPhotoBlob(ph.id)
-    if (!source) return setError('This photo could not be loaded. Re-add it on the Photos step.')
-    void startRender({
-      ...common(l),
-      source,
-      prompt: fullRenderPrompt(lookSelection(project, l), project.declutter),
-      label: rendersFor(project, l, ph.id).length ? 'Fresh render' : 'Initial render',
-    })
+  async function render(l: LookKey, fresh = true) {
+    setError(await renderDesign(project, l, ph, { fresh, accessCode }))
   }
 
-  /** Edit the current rendering with only what changed (Custom Mix edits made on another photo). */
-  async function applyPending() {
-    if (!active) return
-    const source = await getPhotoBlob(active.id)
-    if (!source) return render(current)
-    void startRender({
-      ...common(current),
-      source,
-      prompt: changesPrompt(selection, pending),
-      label: pending.map((c) => CHANGE_LABELS[c]).join(' + '),
-      parentId: active.id,
-    })
-  }
-
-  const renderAll = () => TIERS.forEach((t) => void render(t))
-  const anyRunning = TIERS.some((t) => jobs.get(jobKey(project.id, t, ph.id))?.status === 'running')
+  const renderable = looks.filter((l) => !planRender(project, l, ph.id).nothingChosen)
+  const renderAll = () => renderable.forEach((l) => void render(l))
+  const anyRunning = looks.some((l) => jobs.get(jobKey(project.id, l, ph.id))?.status === 'running')
+  const wallsHere = wallsOnPhoto(project, current, ph.id)
   const isHero = ph.id === project.heroPhotoId
 
   return (
@@ -96,11 +69,13 @@ export default function RenderingsStep() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Renderings</h1>
-          <p className="mt-1 text-neutral-600">Pick a photo, then a look. Each rendering takes about 10–20 seconds.</p>
+          <p className="mt-1 text-neutral-600">Pick a photo, then a design option. Each rendering takes about 10–20 seconds.</p>
         </div>
-        <Button onClick={renderAll} disabled={anyRunning}>
-          ✨ Render all 3 looks{project.photos.length > 1 ? ' of this photo' : ''}
-        </Button>
+        {renderable.length > 1 && (
+          <Button onClick={renderAll} disabled={anyRunning}>
+            ✨ Render all {renderable.length} options{project.photos.length > 1 ? ' of this photo' : ''}
+          </Button>
+        )}
       </div>
 
       {project.photos.length > 1 && (
@@ -114,11 +89,11 @@ export default function RenderingsStep() {
         </div>
       )}
 
-      <div className={`mt-6 grid gap-3 ${looks.length === 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'}`} role="tablist">
+      <div className={`mt-6 grid gap-3 ${looks.length === 1 ? 'grid-cols-1' : looks.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`} role="tablist">
         {looks.map((l) => (
           <LookTab
             key={l}
-            label={TIER_LABELS[l]}
+            label={lookName(project, l)}
             active={l === current}
             done={!!activeVersion(project, l, ph.id)}
             job={jobs.get(jobKey(project.id, l, ph.id))}
@@ -134,15 +109,24 @@ export default function RenderingsStep() {
           {job?.status === 'running' ? (
             <RenderingOverlay imageUrl={activeUrl ?? photoUrl} startedAt={job.startedAt} />
           ) : activeUrl && photoUrl ? (
-            <BeforeAfter before={photoUrl} after={activeUrl} />
+            <div className="relative">
+              <BeforeAfter before={photoUrl} after={activeUrl} />
+              {active?.wallsRemoved && <ConceptBadge />}
+            </div>
           ) : (
             <div className="relative overflow-hidden rounded-2xl">
               {photoUrl && <img src={photoUrl} alt="Kitchen before" className="block w-full" />}
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-white/70 p-6 text-center">
-                <p className="text-xl font-semibold">
-                  See {isHero ? 'their kitchen' : 'this view'} in the {TIER_LABELS[current]} look
-                </p>
-                <Button onClick={() => render(current)}>✨ Render {TIER_LABELS[current]}</Button>
+                {plan?.nothingChosen ? (
+                  <p className="max-w-md text-xl font-semibold">Nothing is picked for {lookName(project, current)} yet. Choose products on the Design step.</p>
+                ) : (
+                  <>
+                    <p className="text-xl font-semibold">
+                      See {isHero ? 'their kitchen' : 'this view'} as {lookName(project, current)}
+                    </p>
+                    <Button onClick={() => render(current)}>✨ Render this option</Button>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -152,8 +136,9 @@ export default function RenderingsStep() {
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-accent bg-accent/5 p-4">
               <p>
                 <strong>Not in this picture yet:</strong> {pending.map((c) => CHANGE_LABELS[c]).join(', ')}
+                {!plan?.canEdit && <span className="block text-sm text-neutral-600">Needs a fresh render from the photo.</span>}
               </p>
-              <Button onClick={applyPending}>↻ Update this picture</Button>
+              <Button onClick={() => render(current, !plan?.canEdit)}>↻ Update this picture</Button>
             </div>
           )}
 
@@ -164,8 +149,8 @@ export default function RenderingsStep() {
               update((p) => ({
                 ...p,
                 activeRender: withActive(p, current, ph.id, v.id),
-                // Custom Mix: picking a version also restores its materials & price
-                ...(current === 'custom' && p.custom ? { custom: { ...p.custom, selection: structuredClone(v.selection) } } : {}),
+                // Picking a version also brings back its products & price
+                designs: p.designs.map((d) => (d.id === current ? { ...d, selection: structuredClone(v.selection) } : d)),
               }))
             }
           />
@@ -173,9 +158,14 @@ export default function RenderingsStep() {
 
         <aside className="space-y-5">
           <div className="rounded-2xl border-2 border-neutral-100 p-5">
-            <h2 className="mb-4 text-lg font-bold">{TIER_LABELS[current]} look</h2>
+            <h2 className="mb-4 text-lg font-bold">{lookName(project, current)}</h2>
             <LookMaterials selection={selection} />
           </div>
+          {wallsHere.length > 0 && (
+            <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+              This option removes the wall marked on this photo. Renderings are <strong>concept only</strong> until a structural review.
+            </p>
+          )}
           {activeUrl && job?.status !== 'running' && (
             <Button variant="secondary" className="w-full" onClick={() => render(current)}>
               ↻ Fresh render from photo

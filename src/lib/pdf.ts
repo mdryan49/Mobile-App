@@ -1,12 +1,11 @@
 import { jsPDF } from 'jspdf'
 import { BRAND, SAMPLE_PRICING_NOTICE } from '../config/brand'
-import { TIER_LABELS } from '../config/catalog'
 import type { AppSettings } from '../config/defaultSettings'
 import { PROPOSAL } from '../config/proposal'
 import type { LookKey, Project } from '../types'
 import { getPhotoBlob } from './db'
-import { calculateEstimate, groupEstimate, GROUPS, money, moneyRange, type Estimate } from './estimate'
-import { activeVersion, availableLooks, lookPricingTier, lookSelection } from './looks'
+import { calculateEstimate, groupEstimate, GROUPS, money, moneyRange, WALL_LABELS, type Estimate } from './estimate'
+import { activeVersion, availableLooks, lookName, lookSelection, lookWalls } from './looks'
 import { materialRows } from './materials'
 
 /**
@@ -85,8 +84,11 @@ async function cropped(blob: Blob, aspect: number, maxW = 1400): Promise<string>
 
 interface LookData {
   look: LookKey
+  name: string
   estimate: Estimate
   image?: string
+  /** The rendering shows a wall removed: label it as a concept */
+  concept?: boolean
 }
 
 export interface ProposalResult {
@@ -95,12 +97,12 @@ export interface ProposalResult {
   number: string
 }
 
-export async function buildProposalPdf(project: Project, settings: AppSettings, numberOverride?: string): Promise<ProposalResult> {
+export async function buildProposalPdf(project: Project, settings: AppSettings, numberOverride?: string, include?: LookKey[]): Promise<ProposalResult> {
   const now = Date.now()
   const number = numberOverride ?? proposalNumber(project, new Date(now))
   const validUntil = now + PROPOSAL.validDays * 86_400_000
-  const looks = availableLooks(project)
-  const recommended: LookKey = project.recommended && looks.includes(project.recommended) ? project.recommended : looks.includes('custom') ? 'custom' : 'better'
+  const looks = include ?? availableLooks(project)
+  const recommended: LookKey = project.recommended && looks.includes(project.recommended) ? project.recommended : looks[0]
   // Recommended look first everywhere
   const ordered = [recommended, ...looks.filter((l) => l !== recommended)]
   const m = project.measurements
@@ -109,20 +111,22 @@ export async function buildProposalPdf(project: Project, settings: AppSettings, 
 
   const data: LookData[] = []
   for (const look of ordered) {
-    const estimate = calculateEstimate(m, lookSelection(project, look), lookPricingTier(project, look), settings.pricing)
+    const estimate = calculateEstimate(m, lookSelection(project, look), settings.pricing, lookWalls(project, look))
     const v = activeVersion(project, look)
     const blob = v && (await getPhotoBlob(v.id))
-    data.push({ look, estimate, image: blob ? await cropped(blob, 16 / 9) : undefined })
+    data.push({ look, name: lookName(project, look), estimate, image: blob ? await cropped(blob, 16 / 9) : undefined, concept: v?.wallsRemoved })
   }
   const heroImg = heroBlob ? await cropped(heroBlob, 16 / 9) : undefined
 
   // Extra views: renderings of the recommended look from non-hero photos
   const extraViews: string[] = []
+  let extraConcept = false
   for (const photo of project.photos) {
     if (photo.id === heroId || extraViews.length >= 2) continue
     const v = activeVersion(project, recommended, photo.id)
     const blob = v && (await getPhotoBlob(v.id))
     if (blob) extraViews.push(await cropped(blob, 4 / 3, 1000))
+    if (blob && v.wallsRemoved) extraConcept = true
   }
 
   const doc = new jsPDF({ unit: 'mm', format: 'letter', compress: true })
@@ -167,6 +171,17 @@ export async function buildProposalPdf(project: Project, settings: AppSettings, 
     return w
   }
 
+  /** Stamp on renderings that show a wall removed */
+  const conceptStamp = (x: number, y: number, w: number, h: number) => {
+    const label = 'CONCEPT ONLY - WALL REMOVAL SUBJECT TO STRUCTURAL REVIEW'
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
+    const tw = Math.min(doc.getTextWidth(label) + 4, w - 4)
+    doc.setFillColor(251, 191, 36)
+    doc.rect(x + 2, y + h - 6.5, tw, 4.5, 'F')
+    text(label, x + 4, y + h - 3.3, { size: 6.5, bold: true, maxWidth: tw - 2 })
+  }
+
   const header = (title: string) => {
     // Logo mark: accent square with a white house
     doc.setFillColor(...ACCENT)
@@ -199,12 +214,13 @@ export async function buildProposalPdf(project: Project, settings: AppSettings, 
   y += Math.max(forLines.length, byLines.length) * 5 + 3
   text(`Date: ${fmtDate(now)}     Valid through: ${fmtDate(validUntil)}`, M, y, { size: 9.5, color: GRAY })
   y += 7
-  y = para(PROPOSAL.intro.replace('{count}', ['zero', 'one', 'two', 'three', 'four'][data.length] ?? String(data.length)), M, y, CONTENT_W, 10.5) + 2
+  y = para(data.length === 1 ? PROPOSAL.introSingle : PROPOSAL.intro.replace('{count}', ['zero', 'one', 'two', 'three'][data.length] ?? String(data.length)), M, y, CONTENT_W, 10.5) + 2
 
   const rec = data[0]
   const bigH = CONTENT_W * (9 / 16)
   image(rec.image ?? heroImg, M, y, CONTENT_W, bigH)
-  badge(rec.image ? `RECOMMENDED: ${TIER_LABELS[rec.look].toUpperCase()}` : 'YOUR KITCHEN TODAY', M + 3, y + 7, 9)
+  badge(rec.image ? (data.length > 1 ? 'RECOMMENDED' : 'YOUR NEW KITCHEN') : 'YOUR KITCHEN TODAY', M + 3, y + 7, 9)
+  if (rec.image && rec.concept) conceptStamp(M, y, CONTENT_W, bigH)
   y += bigH + 5
 
   const smallW = 62
@@ -214,10 +230,10 @@ export async function buildProposalPdf(project: Project, settings: AppSettings, 
     badge('BEFORE', M + 2, y + 5.5, 7.5)
   }
   const tx = rec.image && heroImg ? M + smallW + 8 : M
-  text(`${TIER_LABELS[rec.look]} look`, tx, y + 5, { size: 14, bold: true })
+  text(rec.name, tx, y + 5, { size: 14, bold: true, maxWidth: PAGE_W - M - tx })
   text(moneyRange(rec.estimate.low, rec.estimate.high), tx, y + 13, { size: 18, bold: true, color: ACCENT })
   text('Estimated investment range', tx, y + 18.5, { size: 9, color: GRAY })
-  text(`See all ${data.length} options on the next page.`, tx, y + 26, { size: 9.5 })
+  text(data.length > 1 ? `See all ${data.length} options on the next page.` : 'Details on the next page.', tx, y + 26, { size: 9.5 })
 
   // ---------------- Page 2: Options ----------------
   doc.addPage()
@@ -233,23 +249,30 @@ export async function buildProposalPdf(project: Project, settings: AppSettings, 
     const imgW = Math.min((rowH - 8) * (16 / 9), 86)
     const imgH = imgW * (9 / 16)
     image(d.image, M, top, imgW, imgH)
+    if (d.image && d.concept) conceptStamp(M, top, imgW, imgH)
     const x = M + imgW + 6
     const w = PAGE_W - M - x
-    text(TIER_LABELS[d.look].toUpperCase(), x, top + 5, { size: 13, bold: true })
-    if (d.look === recommended) {
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(13)
-      badge('RECOMMENDED', x + doc.getTextWidth(TIER_LABELS[d.look].toUpperCase()) + 3, top + 5, 7.5)
-    }
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(12.5)
+    const showBadge = d.look === recommended && data.length > 1
+    let title = safe(d.name)
+    const titleMax = w - (showBadge ? 30 : 0)
+    while (doc.getTextWidth(title) > titleMax && title.length > 4) title = title.slice(0, -2)
+    if (title !== safe(d.name)) title = title.trimEnd() + '...'
+    text(title, x, top + 5, { size: 12.5, bold: true })
+    if (showBadge) badge('RECOMMENDED', x + doc.getTextWidth(title) + 3, top + 5, 7.5)
     text(moneyRange(d.estimate.low, d.estimate.high), x, top + 11.5, { size: 12, bold: true, color: ACCENT })
     let my = top + 17.5
-    const lineH = Math.min(4.6, Math.max(3.9, (imgH - 16) / 6))
-    for (const row of materialRows(lookSelection(project, d.look))) {
-      doc.setFillColor(...hex(row.swatch.color))
+    const rows = materialRows(lookSelection(project, d.look))
+    const lineH = Math.min(4.6, Math.max(3.5, (rowH - 22) / rows.length))
+    for (const row of rows) {
       doc.setDrawColor(170, 170, 170)
       doc.setLineWidth(0.2)
-      doc.rect(x, my - 2.6, 3, 3, 'FD')
-      text(`${row.label}:`, x + 4.5, my, { size: 8, bold: true })
+      if (row.swatch) {
+        doc.setFillColor(...hex(row.swatch.color))
+        doc.rect(x, my - 2.6, 3, 3, 'FD')
+      } else doc.rect(x, my - 2.6, 3, 3, 'S')
+      text(`${row.label}:`, x + 4.5, my, { size: 8, bold: true, color: row.kept ? GRAY : INK })
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8)
       const lw = doc.getTextWidth(`${row.label}: `)
@@ -262,7 +285,7 @@ export async function buildProposalPdf(project: Project, settings: AppSettings, 
       while (doc.getTextWidth(t) > maxW && size > 6.8) doc.setFontSize((size -= 0.2))
       while (doc.getTextWidth(t) > maxW && t.length > 4) t = t.slice(0, -2)
       if (t !== safe(row.text)) t = t.replace(/[ ,]*$/, '') + '...'
-      text(t, x + 4.5 + lw, my, { size })
+      text(t, x + 4.5 + lw, my, { size, color: row.kept ? GRAY : INK })
       my += lineH
     }
     if (i < data.length - 1) rule(rowsTop + (i + 1) * rowH - 1)
@@ -281,10 +304,16 @@ export async function buildProposalPdf(project: Project, settings: AppSettings, 
   const colX = (i: number) => M + labelW + i * colW + colW - 2
   y += 8
   text('Category', M, y, { size: 8.5, bold: true, color: GRAY })
+  let headerLines = 1
   data.forEach((d, i) => {
-    text(TIER_LABELS[d.look].toUpperCase(), colX(i), y, { size: 9.5, bold: true, align: 'right', color: d.look === recommended ? ACCENT : INK })
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    const lines = (doc.splitTextToSize(safe(d.name), colW - 4) as string[]).slice(0, 3)
+    headerLines = Math.max(headerLines, lines.length)
+    doc.setTextColor(...(d.look === recommended && data.length > 1 ? ACCENT : INK))
+    doc.text(lines, colX(i), y, { align: 'right' })
   })
-  y += 2.5
+  y += (headerLines - 1) * 9 * PT * 1.25 + 2.5
   rule(y, INK, 0.4)
   for (const k of groupKeys) {
     y += 7
@@ -299,7 +328,7 @@ export async function buildProposalPdf(project: Project, settings: AppSettings, 
   y += 8
   text('Estimated range', M, y, { size: 10.5, bold: true })
   data.forEach((d, i) => {
-    text(safe(moneyRange(d.estimate.low, d.estimate.high)), colX(i), y, { size: data.length === 4 ? 8.5 : 9.5, bold: true, align: 'right', color: ACCENT })
+    text(safe(moneyRange(d.estimate.low, d.estimate.high)), colX(i), y, { size: 9.5, bold: true, align: 'right', color: ACCENT })
   })
   y += 3
   rule(y, INK, 0.4)
@@ -321,19 +350,27 @@ export async function buildProposalPdf(project: Project, settings: AppSettings, 
     ['Countertops', `approx. ${m.countertopSqft} sq ft`],
     ['Backsplash', `approx. ${m.backsplashSqft} sq ft`],
     ['Demolition', demoLabel],
+    ...(project.walls.length
+      ? ([
+          [
+            'Wall removal',
+            `${project.walls.map((w) => `${w.lengthFt || '?'} ft (${WALL_LABELS[w.structure].toLowerCase()})`).join('; ')}. Included in: ${
+              data.filter((d) => lookWalls(project, d.look).length).map((d) => d.name).join(', ') || 'no options'
+            }. Subject to structural review.`,
+          ],
+        ] as [string, string][])
+      : []),
     [
       'Also included',
       [
-        m.movePlumbing ? 'plumbing relocation' : 'plumbing reconnect',
-        m.electricalUpdates ? 'electrical updates' : 'electrical reconnect',
-        m.newLighting && 'new lighting',
-        m.newFlooring && `new flooring (${m.flooringSqft} sq ft)`,
-        m.paintWalls && 'wall paint',
+        m.movePlumbing ? 'plumbing relocation' : 'plumbing reconnect where needed',
+        m.electricalUpdates ? 'electrical updates' : 'electrical reconnect where needed',
         m.permits && 'permits & inspections',
       ]
         .filter(Boolean)
         .join(', '),
     ],
+    ['Not included', 'Anything marked "Keep existing" in an option stays as it is today.'],
   ]
   for (const [k, v] of scope) {
     text(k, M, y, { size: 9.5, bold: true })
@@ -347,13 +384,16 @@ export async function buildProposalPdf(project: Project, settings: AppSettings, 
   header('Next Steps')
   y = 36
   if (extraViews.length) {
-    text(`More views of your ${TIER_LABELS[recommended]} kitchen`, M, y, { size: 13, bold: true })
+    text(`More views: ${lookName(project, recommended)}`, M, y, { size: 13, bold: true, maxWidth: CONTENT_W })
     y += 4
     const w = extraViews.length === 1 ? CONTENT_W * 0.6 : (CONTENT_W - 6) / 2
     const h = w * (3 / 4)
     const hh = Math.min(h, 62)
     const ww = hh * (4 / 3)
-    extraViews.forEach((v, i) => image(v, M + i * (ww + 6), y, ww, hh))
+    extraViews.forEach((v, i) => {
+      image(v, M + i * (ww + 6), y, ww, hh)
+      if (extraConcept) conceptStamp(M + i * (ww + 6), y, ww, hh)
+    })
     y += hh + 9
   }
   text('Next steps', M, y, { size: 16, bold: true })
@@ -375,18 +415,15 @@ export async function buildProposalPdf(project: Project, settings: AppSettings, 
   y += 5.5
   text(`This proposal is valid for ${PROPOSAL.validDays} days, through ${fmtDate(validUntil)}.`, M + 6, y, { size: 9.5, color: GRAY })
   y += 8
-  text('I choose:', M + 6, y, { size: 10, bold: true })
-  let cx = M + 26
+  text(data.length > 1 ? 'I choose:' : 'I approve:', M + 6, y, { size: 10, bold: true })
   for (const d of data) {
     doc.setDrawColor(...INK)
     doc.setLineWidth(0.35)
-    doc.rect(cx, y - 3.4, 4, 4)
-    text(`${TIER_LABELS[d.look]}`, cx + 6, y, { size: 10 })
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10)
-    cx += 6 + doc.getTextWidth(TIER_LABELS[d.look]) + 9
+    doc.rect(M + 30, y - 3.4, 4, 4)
+    text(`${d.name}  (${moneyRange(d.estimate.low, d.estimate.high)})`, M + 36, y, { size: 10, maxWidth: CONTENT_W - 42 })
+    y += 6.5
   }
-  y += 14
+  y += 7
   const sigW = (CONTENT_W - 12 - 10) * 0.66
   const dateX = M + 6 + sigW + 10
   const sigLine = (label: string) => {

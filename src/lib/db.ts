@@ -91,6 +91,7 @@ export async function duplicateProject(id: string): Promise<Project | undefined>
     sourcePhotoId: remap(r.sourcePhotoId),
     parentId: r.parentId && remap(r.parentId),
   }))
+  copy.walls = src.walls.map((w) => ({ ...w, id: newId(), photoId: remap(w.photoId) }))
   copy.activeRender = Object.fromEntries(
     Object.entries(src.activeRender).map(([k, v]) => {
       const [look, photoId] = k.split('@')

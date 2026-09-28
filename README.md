@@ -4,10 +4,10 @@ An installable iPad web app for in-home kitchen remodel consultations. At the ki
 
 1. Enters **customer info**
 2. Takes **3-6 kitchen photos** and picks a hero shot
-3. Fills in **measurements & scope**
-4. Shows a **Good / Better / Best estimate** as price ranges
-5. Generates **AI renderings** of the homeowner's actual kitchen in each look (before/after slider)
-6. **Mixes & matches** finishes live, with instant pricing and one-change re-renders
+3. Fills in **measurements & scope**, and paints any **wall to remove** right on a photo
+4. Builds **up to 3 design options** from supplier products, with live pricing
+5. Shows the **estimate** for each option side by side, as price ranges
+6. Generates **AI renderings** of the homeowner's actual kitchen for each option (before/after slider)
 7. Creates a branded **4-page proposal PDF** to share, download or print
 
 Everything is stored **on the iPad only** (IndexedDB). No login, no cloud database.
@@ -62,9 +62,33 @@ How it works: the app calls `/api/render` → `netlify/functions/render.mts` →
 
 Open the site in Safari → Share → **Add to Home Screen**. It then opens full screen like an app, works offline (except AI renders), and is much less likely to have its saved data cleared.
 
-## Edit the catalog (products & prices)
+## Design options (how the salesperson builds a kitchen)
 
-Everything lives in **`src/config/catalog.ts`**. Each item has a name, brand, tier, unit, unit cost and swatch.
+On the **Design** step, create up to 3 options (e.g. "Option A: Classic White"). A new option starts **empty**.
+For each category (cabinets, door style, cabinet color, countertop, backsplash, sink & faucet, faucet finish,
+hardware, wall paint, flooring, lighting) pick a product, or leave it on **Keep existing**:
+
+- *Keep existing* costs nothing and the AI leaves that part of the kitchen exactly as photographed.
+- A cabinet **color** with no cabinet **line** = refinish/paint the existing cabinets (priced per foot in Settings).
+- Every product card shows its price difference (+$1,200 / -$800) before you tap it.
+- Change something after rendering and tap **Update picture**. Additions are edited onto the current rendering;
+  going back to "keep existing" or changing walls re-renders from the original photo.
+
+## Wall removal
+
+**Scope → Walls to remove → Mark a wall on (photo)**. Paint over the wall with a finger, choose load-bearing /
+not load-bearing / don't know, enter the length and a note ("open to the dining room").
+
+- Priced from Settings. **"Don't know" is priced as load-bearing** until verified.
+- Each design option has a **"Remove the marked wall"** switch, so Option A can open the wall and Option B can keep it.
+- The AI gets a second copy of the photo with the wall painted red. It only opens walls marked **on that photo**.
+- Renderings with a wall removed are stamped **"Concept only: subject to structural review"** in the app and on the PDF.
+
+## Edit the catalog (products, suppliers & prices)
+
+Everything lives in **`src/config/catalog.ts`**. Each item has a name, brand, **supplier**, unit, unit cost and swatch.
+**Only list what your suppliers can actually deliver.** Set `available: false` to hide an item without deleting it.
+Rename your suppliers once in `SUPPLIERS` at the top of the file.
 
 | Section | Priced by |
 |---|---|
@@ -76,8 +100,9 @@ Everything lives in **`src/config/catalog.ts`**. Each item has a name, brand, ti
 | `SINK_FAUCETS` (Kohler) | per package; `FAUCET_FINISH_UPCHARGE` adds by finish |
 | `HARDWARE_COST_EACH` | per pull |
 | `PAINT_COLORS` | color only (labor in Settings) |
+| `FLOORING` | per sq ft **installed** |
+| `LIGHTING` | per package, installed |
 
-- `TIER_DEFAULTS` at the bottom sets the starting look for Good, Better and Best.
 - `COUNTERTOP_LOOKS` and each item's `promptText` describe finishes to the AI. Keep them visual ("white quartz with soft gray veining").
 - Save, commit and push. Netlify redeploys automatically.
 
@@ -87,6 +112,7 @@ Home screen → **Settings** → PIN (default **1234**; change it on the same sc
 
 - **Company markup** is built into every line price and **never shown to homeowners**.
 - **Contingency** shows as its own line.
+- **Wall removal** rates: per wall + per foot, for non-load-bearing and load-bearing walls.
 - **Price range** sets the ± on totals.
 - **Salesperson** name, phone and email print on the proposal.
 - Starting values are in `src/config/defaultSettings.ts`. Edits made in Settings are saved on that iPad.
@@ -102,7 +128,8 @@ The estimate shows homeowners **grouped categories**. Tap **🔒 Staff detail** 
 
 ## Demo mode
 
-Tap **Demo mode** on the home screen to create a sample consultation with photos and measurements already filled in.
+Tap **Demo mode** on the home screen to create a sample consultation with photos, measurements and two sample
+options (a full remodel and a budget refresh that keeps the existing cabinet boxes).
 Replace `public/demo/kitchen-1.jpg` (hero), `kitchen-2.jpg` and `kitchen-3.jpg` to change the demo kitchen.
 
 **Tip:** render the demo once, then use **Duplicate** before each pitch. Duplicates keep the renderings, so a demo works even without internet.
@@ -118,6 +145,9 @@ src/lib/db.ts                 IndexedDB storage (projects, photos, renderings, s
 src/lib/estimate.ts           Pricing engine + homeowner categories
 src/lib/prompt.ts             AI rendering prompts
 src/lib/renderJobs.ts         Render queue with retry (never loses inputs)
+src/lib/renderActions.ts      Decides quick edit vs. fresh render for a design option
+src/lib/wallMask.ts           Paints marked walls red for the AI reference image
+src/pages/DesignStep.tsx      Build design options from supplier products
 src/lib/pdf.ts                Proposal PDF (jsPDF, client-side)
 src/pages/                    One screen per step
 netlify/functions/render.mts  Server-side Gemini proxy (keeps the API key secret)

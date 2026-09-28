@@ -4,8 +4,11 @@
 export const PROPOSAL = {
   validDays: 30,
   title: 'Kitchen Remodel Proposal',
+  /** {count} is replaced with the number of options */
   intro:
-    'Thank you for inviting us into your home. Below are {count} ways to transform your kitchen, each shown in your own space, with an estimated investment range.',
+    'Thank you for inviting us into your home. Below are {count} design options for your kitchen, each shown in your own space with an estimated investment range.',
+  introSingle:
+    'Thank you for inviting us into your home. Below is the design we created together, shown in your own space with an estimated investment range.',
   nextSteps: [
     { title: 'Choose your look', text: 'Pick the option you love, or keep mixing finishes with us until it feels right.' },
     { title: 'Final site measure', text: 'We verify every dimension and confirm your final price in writing.' },

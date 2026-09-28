@@ -1,6 +1,12 @@
-import { ChoiceGroup, Field, NumberInput, Toggle } from '../components/ui'
+import { useState } from 'react'
+import { WallEditor, newWall } from '../components/WallEditor'
+import { Button, ChoiceGroup, Field, NumberInput, Toggle } from '../components/ui'
+import { usePhotoUrl } from '../hooks/usePhotoUrl'
+import { money, wallCost, WALL_LABELS } from '../lib/estimate'
+import { newId } from '../lib/id'
+import { useSettings } from '../lib/settings'
 import { applySuggestions, suggestedBacksplashSqft, suggestedCountertopSqft } from '../lib/project'
-import type { DemoScope, Layout, Measurements } from '../types'
+import type { DemoScope, Layout, Measurements, WallChange } from '../types'
 import { useProjectContext } from './ProjectLayout'
 
 const LAYOUTS: { value: Layout; label: string; hint: string }[] = [
@@ -85,28 +91,26 @@ export default function ScopeStep() {
       </div>
 
       <div className="space-y-4">
+        <h2 className="text-xl font-bold">Areas</h2>
+        <p className="-mt-2 text-neutral-600">Only priced in design options that include new flooring or paint.</p>
+        <div className="grid gap-5 md:grid-cols-2">
+          <Field label="Flooring area">
+            <NumberInput value={m.flooringSqft} onChange={(flooringSqft) => set({ flooringSqft })} suffix="sq ft" />
+          </Field>
+          <Field label="Wall paint area" hint="Wall length × height, minus cabinets & windows">
+            <NumberInput value={m.paintSqft} onChange={(paintSqft) => set({ paintSqft })} suffix="sq ft" />
+          </Field>
+        </div>
+      </div>
+
+      <WallsSection />
+
+      <div className="space-y-4">
         <h2 className="text-xl font-bold">Additional work</h2>
         <div className="grid gap-3 md:grid-cols-2">
           <Toggle label="Move plumbing" hint="Relocate sink or dishwasher" checked={m.movePlumbing} onChange={(movePlumbing) => set({ movePlumbing })} />
           <Toggle label="Electrical updates" hint="New circuits, outlets, code updates" checked={m.electricalUpdates} onChange={(electricalUpdates) => set({ electricalUpdates })} />
-          <Toggle label="New lighting" hint="Recessed, pendants, under-cabinet" checked={m.newLighting} onChange={(newLighting) => set({ newLighting })} />
           <Toggle label="Permits" hint="Pull permits & schedule inspections" checked={m.permits} onChange={(permits) => set({ permits })} />
-          <div className="space-y-3">
-            <Toggle label="New flooring" checked={m.newFlooring} onChange={(newFlooring) => set({ newFlooring })} />
-            {m.newFlooring && (
-              <Field label="Flooring area">
-                <NumberInput value={m.flooringSqft} onChange={(flooringSqft) => set({ flooringSqft })} suffix="sq ft" />
-              </Field>
-            )}
-          </div>
-          <div className="space-y-3">
-            <Toggle label="Paint walls" checked={m.paintWalls} onChange={(paintWalls) => set({ paintWalls })} />
-            {m.paintWalls && (
-              <Field label="Wall area" hint="Wall length × height, minus cabinets & windows">
-                <NumberInput value={m.paintSqft} onChange={(paintSqft) => set({ paintSqft })} suffix="sq ft" />
-              </Field>
-            )}
-          </div>
         </div>
       </div>
     </section>
@@ -146,5 +150,103 @@ function SuggestedField({
         )}
       </span>
     </Field>
+  )
+}
+
+/** Walls to remove: each one is painted on a photo, priced, and sent to the AI. */
+function WallsSection() {
+  const { project, update } = useProjectContext()
+  const { settings } = useSettings()
+  const [editing, setEditing] = useState<{ wall: WallChange; isNew: boolean } | null>(null)
+  const photoOf = (id: string) => project.photos.find((p) => p.id === id)
+
+  const save = (w: WallChange) => {
+    update((p) => ({ ...p, walls: p.walls.some((x) => x.id === w.id) ? p.walls.map((x) => (x.id === w.id ? w : x)) : [...p.walls, w] }))
+    setEditing(null)
+  }
+  const remove = (id: string) => {
+    update((p) => ({ ...p, walls: p.walls.filter((x) => x.id !== id) }))
+    setEditing(null)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-xl font-bold">Walls to remove</h2>
+        <p className="text-neutral-600">Paint the wall on a photo. It's priced here and opened up in the renderings for options that include it.</p>
+      </div>
+
+      {project.walls.length > 0 && (
+        <ul className="space-y-3">
+          {project.walls.map((w, i) => (
+            <WallRow
+              key={w.id}
+              wall={w}
+              index={i}
+              photoNumber={project.photos.findIndex((p) => p.id === w.photoId) + 1}
+              price={money(wallCost(w, settings.pricing) * (1 + settings.pricing.markupPct / 100))}
+              onEdit={() => setEditing({ wall: w, isNew: false })}
+            />
+          ))}
+        </ul>
+      )}
+
+      {project.photos.length === 0 ? (
+        <p className="rounded-xl border-2 border-dashed border-neutral-200 p-6 text-center text-neutral-500">Add kitchen photos first, then mark the wall on one.</p>
+      ) : (
+        <div>
+          <div className="mb-2 text-sm font-semibold tracking-wide text-neutral-500 uppercase">Mark a wall on</div>
+          <ul className="flex gap-3 overflow-x-auto pb-1">
+            {project.photos.map((ph, i) => (
+              <PhotoButton key={ph.id} photoId={ph.id} label={`Photo ${i + 1}${ph.id === project.heroPhotoId ? ' ★' : ''}`} onClick={() => setEditing({ wall: newWall(newId(), ph.id), isNew: true })} />
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {editing && photoOf(editing.wall.photoId) && (
+        <WallEditor
+          photo={photoOf(editing.wall.photoId)!}
+          wall={editing.wall}
+          onSave={save}
+          onCancel={() => setEditing(null)}
+          onDelete={editing.isNew ? undefined : () => remove(editing.wall.id)}
+        />
+      )}
+    </div>
+  )
+}
+
+function WallRow({ wall, index, photoNumber, price, onEdit }: { wall: WallChange; index: number; photoNumber: number; price: string; onEdit: () => void }) {
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-neutral-200 p-4">
+      <div>
+        <div className="font-semibold">
+          Wall {index + 1} · Photo {photoNumber} · {wall.lengthFt || '?'} ft
+        </div>
+        <div className={`text-sm ${wall.structure === 'non-bearing' ? 'text-neutral-600' : 'text-amber-800'}`}>
+          {WALL_LABELS[wall.structure]}
+          {wall.structure === 'unknown' ? ' (priced as load-bearing)' : ''} · about {price}
+          {wall.note ? ` · "${wall.note}"` : ''}
+        </div>
+      </div>
+      <Button variant="secondary" onClick={onEdit}>
+        Edit
+      </Button>
+    </li>
+  )
+}
+
+function PhotoButton({ photoId, label, onClick }: { photoId: string; label: string; onClick: () => void }) {
+  const url = usePhotoUrl(photoId)
+  return (
+    <li className="shrink-0">
+      <button type="button" onClick={onClick} className="w-36 overflow-hidden rounded-xl border-2 border-neutral-200 text-left active:border-accent">
+        <div className="aspect-[4/3] bg-neutral-100">{url && <img src={url} alt="" className="h-full w-full object-cover" />}</div>
+        <div className="px-2 py-1.5 text-sm font-semibold">
+          {label} <span className="text-accent">+ Mark wall</span>
+        </div>
+      </button>
+    </li>
   )
 }
