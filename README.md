@@ -3,7 +3,7 @@
 An iPad web app (installable PWA) for in-home kitchen remodel consultations.
 Everything is stored **on the iPad only** (IndexedDB). No login, no cloud database.
 
-> Status: **Phase 3 of 5**: home screen, customer info, photos, demo mode, measurements, grouped Good/Better/Best estimate, PIN-protected settings, AI renderings with before/after slider.
+> Status: **Phase 4 of 5**: home screen, customer info, photos, demo mode, measurements, grouped Good/Better/Best estimate, PIN-protected settings, AI renderings with before/after slider, Mix & Match custom look with live pricing, single-change re-renders and saved versions.
 > Full setup docs (Gemini key, Netlify deploy, catalog & pricing) arrive in Phase 5.
 
 ## Run locally

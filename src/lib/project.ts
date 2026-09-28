@@ -60,6 +60,7 @@ export function emptyProject(): Project {
     selections: structuredClone(TIER_DEFAULTS),
     renders: [],
     activeRender: {},
+    custom: null,
     declutter: true,
   }
 }
@@ -76,6 +77,7 @@ export function normalizeProject(p: Project): Project {
     },
     renders: p.renders ?? [],
     activeRender: p.activeRender ?? {},
+    custom: p.custom ? { ...p.custom, selection: { ...TIER_DEFAULTS[p.custom.baseTier], ...p.custom.selection } } : null,
     declutter: p.declutter ?? true,
   }
 }

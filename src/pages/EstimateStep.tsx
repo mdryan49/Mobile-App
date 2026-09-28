@@ -4,7 +4,9 @@ import { useStaffUnlocked } from '../lib/pinLock'
 import { useNavigate } from 'react-router-dom'
 import { Swatch } from '../components/Swatch'
 import { Button, SamplePricingBadge } from '../components/ui'
-import { TIER_LABELS, TIERS, resolveSelection, type Tier } from '../config/catalog'
+import { TIER_LABELS, resolveSelection } from '../config/catalog'
+import { availableLooks, lookPricingTier, lookSelection } from '../lib/looks'
+import type { LookKey } from '../types'
 import { calculateEstimate, groupEstimate, GROUPS, LINE_LABELS, money, moneyRange, type Estimate, type EstimateGroup, type GroupKey, type LineKey } from '../lib/estimate'
 import { useSettings } from '../lib/settings'
 import { useProjectContext } from './ProjectLayout'
@@ -18,12 +20,13 @@ export default function EstimateStep() {
   const [askPin, setAskPin] = useState(false)
   const m = project.measurements
 
+  const looks = availableLooks(project)
   const estimates = useMemo(
     () =>
       Object.fromEntries(
-        TIERS.map((t) => [t, calculateEstimate(m, project.selections[t], t, settings.pricing)]),
-      ) as Record<Tier, Estimate>,
-    [m, project.selections, settings.pricing],
+        availableLooks(project).map((l) => [l, calculateEstimate(m, lookSelection(project, l), lookPricingTier(project, l), settings.pricing)]),
+      ) as Record<LookKey, Estimate>,
+    [project, m, settings.pricing],
   )
 
   if (m.baseCabinetLf <= 0) {
@@ -42,12 +45,12 @@ export default function EstimateStep() {
 
   const detailed = staffView && staffUnlocked
   const lineKeys = estimates.good.lines.map((l) => l.key)
-  const amountOf = (t: Tier, k: LineKey) => estimates[t].lines.find((l) => l.key === k)
-  const groups = Object.fromEntries(TIERS.map((t) => [t, groupEstimate(estimates[t], project.selections[t])])) as Record<Tier, EstimateGroup[]>
+  const amountOf = (t: LookKey, k: LineKey) => estimates[t].lines.find((l) => l.key === k)
+  const groups = Object.fromEntries(looks.map((t) => [t, groupEstimate(estimates[t], lookSelection(project, t))])) as Record<LookKey, EstimateGroup[]>
   const groupKeys = GROUPS.map((g) => g.key).filter((k) => groups.good.some((g) => g.key === k))
-  const groupOf = (t: Tier, k: GroupKey) => groups[t].find((g) => g.key === k)
+  const groupOf = (t: LookKey, k: GroupKey) => groups[t].find((g) => g.key === k)
 
-  const rows: { key: string; label: string; cell: (t: Tier) => { amount: number; detail: string } | undefined }[] = detailed
+  const rows: { key: string; label: string; cell: (t: LookKey) => { amount: number; detail: string } | undefined }[] = detailed
     ? lineKeys.map((k) => ({ key: k, label: LINE_LABELS[k], cell: (t) => amountOf(t, k) }))
     : groupKeys.map((k) => ({ key: k, label: GROUPS.find((g) => g.key === k)!.label, cell: (t) => groupOf(t, k) }))
 
@@ -62,7 +65,9 @@ export default function EstimateStep() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold">Your estimate</h1>
-          <p className="mt-1 text-neutral-600">Three ways to get the kitchen you want. Final price confirmed after a site measure.</p>
+          <p className="mt-1 text-neutral-600">
+            {looks.length === 4 ? 'Three packages plus your custom mix.' : 'Three ways to get the kitchen you want.'} Final price confirmed after a site measure.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <SamplePricingBadge />
@@ -80,7 +85,7 @@ export default function EstimateStep() {
       <div className="mt-6 overflow-hidden rounded-2xl border-2 border-neutral-100">
         <table className="w-full table-fixed border-collapse text-left">
           <colgroup>
-            <col className="w-[28%]" />
+            <col className={looks.length === 4 ? 'w-[20%]' : 'w-[28%]'} />
             <col />
             <col />
             <col />
@@ -88,9 +93,9 @@ export default function EstimateStep() {
           <thead>
             <tr>
               <th className="p-4 align-bottom text-sm font-semibold text-neutral-500 uppercase">Package</th>
-              {TIERS.map((t) => (
-                <th key={t} className={`p-4 align-top ${t === 'better' ? 'bg-accent/5' : ''}`}>
-                  <TierHeader tier={t} estimate={estimates[t]} selection={project.selections[t]} />
+              {looks.map((t) => (
+                <th key={t} className={`p-4 align-top ${t === 'better' ? 'bg-accent/5' : t === 'custom' ? 'bg-amber-50' : ''}`}>
+                  <TierHeader tier={t} estimate={estimates[t]} selection={lookSelection(project, t)} compact={looks.length === 4} />
                 </th>
               ))}
             </tr>
@@ -99,10 +104,10 @@ export default function EstimateStep() {
             {rows.map((row) => (
               <tr key={row.key} className="border-t border-neutral-100">
                 <td className="p-4 align-top font-semibold">{row.label}</td>
-                {TIERS.map((t) => {
+                {looks.map((t) => {
                   const line = row.cell(t)
                   return (
-                    <td key={t} className={`p-4 align-top ${t === 'better' ? 'bg-accent/5' : ''}`}>
+                    <td key={t} className={`p-4 align-top ${t === 'better' ? 'bg-accent/5' : t === 'custom' ? 'bg-amber-50' : ''}`}>
                       <div className="text-[17px] font-semibold tabular-nums">{line ? money(line.amount) : '—'}</div>
                       {line?.detail && <div className="mt-0.5 text-[13px] leading-snug text-neutral-500">{line.detail}</div>}
                     </td>
@@ -114,8 +119,8 @@ export default function EstimateStep() {
           <tfoot>
             <tr className="border-t-2 border-black">
               <td className="p-4 text-lg font-bold">Estimated investment</td>
-              {TIERS.map((t) => (
-                <td key={t} className={`p-4 ${t === 'better' ? 'bg-accent/5' : ''}`}>
+              {looks.map((t) => (
+                <td key={t} className={`p-4 ${t === 'better' ? 'bg-accent/5' : t === 'custom' ? 'bg-amber-50' : ''}`}>
                   <div className="text-xl leading-tight font-bold text-accent tabular-nums">
                     {moneyRange(estimates[t].low, estimates[t].high)}
                   </div>
@@ -141,19 +146,19 @@ export default function EstimateStep() {
   )
 }
 
-function TierHeader({ tier, estimate, selection }: { tier: Tier; estimate: Estimate; selection: Parameters<typeof resolveSelection>[0] }) {
+function TierHeader({ tier, estimate, selection, compact }: { tier: LookKey; estimate: Estimate; selection: Parameters<typeof resolveSelection>[0]; compact: boolean }) {
   const r = resolveSelection(selection)
   return (
     <div>
-      <div className="flex items-center gap-2">
-        <span className="text-2xl font-bold tracking-wide uppercase">{TIER_LABELS[tier]}</span>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className={`${compact ? 'text-xl' : 'text-2xl'} leading-tight font-bold tracking-wide uppercase`}>{TIER_LABELS[tier]}</span>
         {tier === 'better' && <span className="rounded bg-accent px-2 py-0.5 text-[11px] font-bold whitespace-nowrap text-white uppercase">Most popular</span>}
       </div>
-      <div className="mt-2 flex gap-1.5">
-        <Swatch swatch={r.cabinetFinish.swatch} className="h-8 w-8" />
-        <Swatch swatch={r.countertop.swatch} className="h-8 w-8" />
-        <Swatch swatch={r.backsplash.swatch} className="h-8 w-8" />
-        <Swatch swatch={r.hardwareFinish.swatch} className="h-8 w-8" />
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <Swatch swatch={r.cabinetFinish.swatch} className={compact ? "h-6 w-6" : "h-8 w-8"} />
+        <Swatch swatch={r.countertop.swatch} className={compact ? "h-6 w-6" : "h-8 w-8"} />
+        <Swatch swatch={r.backsplash.swatch} className={compact ? "h-6 w-6" : "h-8 w-8"} />
+        <Swatch swatch={r.hardwareFinish.swatch} className={compact ? "h-6 w-6" : "h-8 w-8"} />
       </div>
       <div className="mt-2 text-[13px] leading-snug font-normal text-neutral-600">
         {r.cabinetLine.name} {r.doorStyle.name.toLowerCase()} in {r.cabinetFinish.name.toLowerCase()}, {r.countertop.brand}{' '}

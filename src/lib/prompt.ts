@@ -59,13 +59,36 @@ export function fullRenderPrompt(sel: Selection, declutter: boolean): string {
   ].join('\n\n')
 }
 
-/** Edit an existing rendering, changing only one finish (used by Mix & Match). */
-export function singleChangePrompt(sel: Selection, change: ChangeKey): string {
+/** Which visible finish each selection field controls (cabinet line affects price, not the picture). */
+export const FIELD_TO_CHANGE: Partial<Record<keyof Selection, ChangeKey>> = {
+  cabinetFinishId: 'cabinets',
+  doorStyleId: 'cabinets',
+  countertopId: 'countertop',
+  backsplashId: 'backsplash',
+  hardwareFinishId: 'hardware',
+  sinkFaucetId: 'sink',
+  faucetFinishId: 'sink',
+  paintId: 'paint',
+}
+
+/** Visible finishes that differ between what a rendering shows and the current selection. */
+export function pendingChanges(rendered: Selection, current: Selection): ChangeKey[] {
+  const out = new Set<ChangeKey>()
+  for (const [field, change] of Object.entries(FIELD_TO_CHANGE) as [keyof Selection, ChangeKey][]) {
+    if (rendered[field] !== current[field]) out.add(change)
+  }
+  return [...out]
+}
+
+/** Edit an existing rendering, changing ONLY the listed finishes (Mix & Match). */
+export function changesPrompt(sel: Selection, changes: ChangeKey[]): string {
   const d = describe(sel)
+  const list = changes.map((c) => `- ${CHANGE_LABELS[c]} → ${d[c]}`).join('\n')
+  const one = changes.length === 1
   return [
-    `This is a rendering of a remodeled kitchen. Make exactly ONE change and leave everything else pixel-for-pixel identical.`,
-    `THE ONE CHANGE: ${CHANGE_LABELS[change]} → ${d[change]}.`,
-    `Do not change anything else: same cabinets, countertops, backsplash, hardware, faucet, wall color, appliances, layout, camera angle, lighting and objects (except where the change requires it).`,
+    `This is a rendering of a remodeled kitchen. Make ${one ? 'exactly ONE change' : `ONLY these ${changes.length} changes`} and leave everything else pixel-for-pixel identical.`,
+    `${one ? 'THE CHANGE' : 'THE CHANGES'}:\n${list}`,
+    `Do not change anything else: keep every other finish, the appliances, layout, camera angle, framing, lighting and objects exactly as they are.`,
     STYLE_RULES,
   ].join('\n\n')
 }

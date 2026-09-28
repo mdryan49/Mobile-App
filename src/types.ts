@@ -73,6 +73,8 @@ export interface Project {
   renders: RenderVersion[]
   /** Which rendering is currently shown for each look */
   activeRender: Partial<Record<LookKey, string>>
+  /** The homeowner's own mix (Mix & Match). Priced with the base tier's labor rates. */
+  custom: { selection: Selection; baseTier: Tier } | null
   /** Ask the AI to tidy countertop clutter in renderings */
   declutter: boolean
 }
