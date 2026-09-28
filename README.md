@@ -39,7 +39,7 @@ public/demo/kitchen-2.jpg
 public/demo/kitchen-3.jpg
 ```
 
-`.jpg`, `.png`, or `.webp` all work and take priority over the illustrated `.svg` placeholders.
+`.jpg`, `.png`, or `.webp` all work. Replace these files to change the demo kitchen.
 
 ## Project structure
 

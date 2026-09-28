@@ -6,7 +6,7 @@ import type { Project } from '../types'
 /**
  * DEMO MODE
  * Drop your own photos into /public/demo as kitchen-1.jpg, kitchen-2.jpg, kitchen-3.jpg
- * and they'll be used automatically. Until then, the illustrated .svg placeholders load.
+ * and they'll be used automatically. Any of .jpg / .jpeg / .png / .webp works.
  * Photo #1 is the hero.
  */
 const DEMO_PHOTO_COUNT = 3
@@ -34,7 +34,7 @@ export async function createDemoProject(): Promise<Project> {
     phone: '(555) 555-0142',
     email: 'jordan.sample@example.com',
     notes:
-      'Demo consultation. Homeowners want a brighter kitchen, more counter space, and an island for homework and entertaining. Budget-conscious but open to upgrades.',
+      'Demo consultation. L-shape kitchen with a large island. Gray shaker cabinets, speckled granite, and white herringbone backsplash today. Homeowners want a fresher, more modern look and are open to new cabinet colors and quartz counters.',
   }
   for (let i = 1; i <= DEMO_PHOTO_COUNT; i++) {
     const { blob, width, height } = await compressImage(await fetchDemoPhoto(i))
