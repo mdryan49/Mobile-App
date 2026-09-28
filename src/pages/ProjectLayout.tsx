@@ -85,8 +85,8 @@ export default function ProjectLayout() {
         <span className="text-sm text-neutral-500">
           Step {currentIdx + 1} of {STEPS.length}
         </span>
-        <Button onClick={() => next && navigate(next.path, { replace: true })} disabled={!next} className="min-w-32">
-          {next?.short ?? 'Done'} →
+        <Button onClick={() => (next ? navigate(next.path, { replace: true }) : navigate('/'))} className="min-w-32">
+          {next ? `${next.short} →` : 'Done ✓'}
         </Button>
       </footer>
     </div>

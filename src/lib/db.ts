@@ -75,6 +75,7 @@ export async function duplicateProject(id: string): Promise<Project | undefined>
   copy.createdAt = now
   copy.updatedAt = now
   copy.isDemo = false
+  copy.proposal = null
   copy.customer.name = `${src.customer.name || 'Untitled'} (copy)`
 
   const idMap = new Map<string, string>()

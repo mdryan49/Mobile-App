@@ -77,6 +77,10 @@ export interface Project {
   activeRender: Record<string, string>
   /** The homeowner's own mix (Mix & Match). Priced with the base tier's labor rates. */
   custom: { selection: Selection; baseTier: Tier } | null
+  /** Look the salesperson recommends; featured first on the proposal */
+  recommended: LookKey | null
+  /** Set the first time a proposal PDF is created */
+  proposal: { number: string; createdAt: number } | null
   /** Ask the AI to tidy countertop clutter in renderings */
   declutter: boolean
 }

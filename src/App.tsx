@@ -3,12 +3,12 @@ import HomePage from './pages/HomePage'
 import ProjectLayout from './pages/ProjectLayout'
 import CustomerStep from './pages/CustomerStep'
 import PhotosStep from './pages/PhotosStep'
-import ComingSoon from './pages/ComingSoon'
 import ScopeStep from './pages/ScopeStep'
 import EstimateStep from './pages/EstimateStep'
 import SettingsPage from './pages/SettingsPage'
 import RenderingsStep from './pages/RenderingsStep'
 import MixStep from './pages/MixStep'
+import ProposalStep from './pages/ProposalStep'
 
 export default function App() {
   return (
@@ -23,7 +23,7 @@ export default function App() {
         <Route path="estimate" element={<EstimateStep />} />
         <Route path="renderings" element={<RenderingsStep />} />
         <Route path="mix" element={<MixStep />} />
-        <Route path="proposal" element={<ComingSoon title="Proposal PDF" phase={5} pricing />} />
+        <Route path="proposal" element={<ProposalStep />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
