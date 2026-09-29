@@ -44,6 +44,10 @@ interface BaseItem {
   available?: boolean
   /** Rooms this product is offered in; omit for every room */
   rooms?: CatalogRoom[]
+  /** Supplier part number / SKU, printed on the proposal. SAMPLE-... values are placeholders. */
+  sku?: string
+  /** e.g. "6-8 weeks", printed on the proposal */
+  leadTime?: string
   swatch: Swatch
 }
 
@@ -261,6 +265,40 @@ export const PAINT_COLORS: PaintColor[] = [
   { id: 'bm-edgecomb-gray', name: 'Edgecomb Gray', brand: 'Benjamin Moore', code: 'HC-173', swatch: { color: '#d8d0c3' } },
 ]
 
+// ---------------- Cabinet accessories (installed, per piece) ----------------
+
+export interface CabinetAccessory extends BaseItem {
+  unit: 'each'
+  cost: number
+  description: string
+}
+
+const accessory = (id: string, name: string, cost: number, description: string): CabinetAccessory => ({
+  id, name, brand: 'Cabinet accessories', supplier: SUPPLIERS.cabinets, rooms: ['kitchen'], unit: 'each', cost, description, swatch: { color: '#e7e1d6' },
+})
+
+export const CABINET_ACCESSORIES: CabinetAccessory[] = [
+  accessory('acc-deep-drawers', 'Deep pot & pan drawers', 380, 'Full-extension deep drawers instead of doors, per base cabinet'),
+  accessory('acc-rollouts', 'Roll-out shelves', 240, 'Pull-out shelves inside a base cabinet'),
+  accessory('acc-swing-corner', 'Swing-out corner unit', 650, 'Blind-corner swing-out organizer'),
+  accessory('acc-trash', 'Pull-out trash & recycling', 290, 'Double-bin pull-out'),
+  accessory('acc-spice', 'Spice pull-out', 260, 'Narrow pull-out next to the range'),
+  accessory('acc-glass-doors', 'Glass-front upper doors (pair)', 420, 'Glass inserts on a pair of wall cabinet doors'),
+  accessory('acc-end-panels', 'Decorative island end panels', 550, 'Finished decorative panels on both island ends'),
+  accessory('acc-crown', 'Crown molding (per 10 ft)', 320, 'Crown molding along the top of wall cabinets'),
+]
+
+// ---------------- Appliances we install (install price is in Settings) ----------------
+
+export const APPLIANCES: { id: string; name: string }[] = [
+  { id: 'range', name: 'Range' },
+  { id: 'cooktop', name: 'Cooktop' },
+  { id: 'wall-oven', name: 'Wall oven' },
+  { id: 'hood', name: 'Range hood / microwave' },
+  { id: 'dishwasher', name: 'Dishwasher' },
+  { id: 'refrigerator', name: 'Refrigerator (water line)' },
+]
+
 // ---------------- Flooring (priced per sq ft INSTALLED) ----------------
 
 export interface Flooring extends BaseItem {
@@ -406,6 +444,39 @@ export interface Selection {
   glassId: string | null
   toiletId: string | null
   bathLightId: string | null
+  /** Kitchen island in a different finish (two-tone). null = same as the perimeter. */
+  islandCabinetFinishId: string | null
+  islandCountertopId: string | null
+  /** Cabinet accessories (roll-outs, swing-out corner, glass doors...) */
+  accessoryIds: string[]
+  /** How each item is supplied: default is "we supply it". See SupplyChoice. */
+  supply: Partial<Record<SupplyField, SupplyChoice>>
+}
+
+/** Fields that hold one product id (everything except the lists above). */
+export type ProductField = { [K in keyof Selection]: Selection[K] extends string | null ? K : never }[keyof Selection]
+
+/**
+ * How an item is supplied:
+ * - allowance: a set dollar budget for the material ("client's choice"); install is priced as usual
+ * - owner: the customer buys it, we install it (install labor only)
+ */
+export type SupplyChoice = { mode: 'allowance'; amount: number } | { mode: 'owner' }
+
+/** Items that can be an allowance or customer-supplied. */
+export type SupplyField = 'flooringId' | 'backsplashId' | 'sinkFaucetId' | 'lightingId' | 'vanityId' | 'toiletId' | 'glassId' | 'bathLightId'
+export const SUPPLY_FIELDS: SupplyField[] = ['flooringId', 'backsplashId', 'sinkFaucetId', 'lightingId', 'vanityId', 'toiletId', 'glassId', 'bathLightId']
+
+/** Starting allowance amounts (materials only) when an item is switched to "Allowance". Edit freely. */
+export const DEFAULT_ALLOWANCE: Record<SupplyField, number> = {
+  flooringId: 1500,
+  backsplashId: 600,
+  sinkFaucetId: 800,
+  lightingId: 900,
+  vanityId: 1200,
+  toiletId: 450,
+  glassId: 1200,
+  bathLightId: 400,
 }
 
 export const EMPTY_SELECTION: Selection = {
@@ -425,6 +496,16 @@ export const EMPTY_SELECTION: Selection = {
   glassId: null,
   toiletId: null,
   bathLightId: null,
+  islandCabinetFinishId: null,
+  islandCountertopId: null,
+  accessoryIds: [],
+  supply: {},
+}
+
+/** A design with nothing chosen at all prices at $0 and renders nothing. */
+export function isEmptySelection(s: Selection): boolean {
+  const products = (Object.keys(EMPTY_SELECTION) as (keyof Selection)[]).filter((k) => typeof EMPTY_SELECTION[k] !== 'object' || EMPTY_SELECTION[k] === null)
+  return products.every((k) => s[k] === null) && !s.accessoryIds?.length && !Object.keys(s.supply ?? {}).length
 }
 
 // ---------------- Lookup helpers ----------------
@@ -450,6 +531,9 @@ export function resolveSelection(s: Selection) {
     glass: find(SHOWER_GLASS, s.glassId),
     toilet: find(TOILETS, s.toiletId),
     bathLight: find(BATH_LIGHTING, s.bathLightId),
+    islandFinish: find(CABINET_FINISHES, s.islandCabinetFinishId),
+    islandCountertop: find(COUNTERTOPS, s.islandCountertopId),
+    accessories: CABINET_ACCESSORIES.filter((a) => s.accessoryIds?.includes(a.id)),
   }
 }
 export type ResolvedSelection = ReturnType<typeof resolveSelection>
@@ -460,3 +544,29 @@ export const isAvailable = (item: { available?: boolean }) => item.available !==
 /** Available and offered in this room. */
 export const offeredIn = (room: CatalogRoom) => (item: { available?: boolean; rooms?: CatalogRoom[] }) =>
   isAvailable(item) && (!item.rooms || item.rooms.includes(room))
+
+// ---------------- Sample SKUs & lead times ----------------
+// Placeholders so the proposal shows where part numbers and lead times go.
+// Replace with your suppliers' real values: set `sku` and `leadTime` on each item above
+// (anything set on an item wins over these defaults).
+
+const sampleSpecs = (list: BaseItem[], leadTime: string) => {
+  for (const item of list) {
+    item.sku ??= `SAMPLE-${item.id.toUpperCase()}`
+    item.leadTime ??= leadTime
+  }
+}
+const CABINET_LEAD: Record<string, string> = { aristokraft: '4-6 weeks', diamond: '6-8 weeks', decora: '8-10 weeks' }
+for (const c of CABINET_LINES) c.leadTime ??= CABINET_LEAD[c.id]
+sampleSpecs(CABINET_LINES, '6-8 weeks')
+sampleSpecs(COUNTERTOPS, '2 weeks after template')
+sampleSpecs(BACKSPLASHES, '1-2 weeks')
+sampleSpecs(SINK_FAUCETS, '1-2 weeks')
+sampleSpecs(CABINET_ACCESSORIES, 'With cabinets')
+sampleSpecs(FLOORING, '1-2 weeks')
+sampleSpecs(LIGHTING, '1 week')
+sampleSpecs(VANITIES, '2-4 weeks')
+sampleSpecs(SHOWER_SYSTEMS, '1-3 weeks')
+sampleSpecs(SHOWER_GLASS, '2-3 weeks after measure')
+sampleSpecs(TOILETS, '1 week')
+sampleSpecs(BATH_LIGHTING, '1-2 weeks')

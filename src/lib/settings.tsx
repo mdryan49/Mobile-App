@@ -10,6 +10,7 @@ function withDefaults(saved: Partial<AppSettings> | undefined): AppSettings {
   return {
     pin: saved?.pin ?? d.pin,
     renderAccessCode: saved?.renderAccessCode ?? d.renderAccessCode,
+    company: { ...d.company, ...saved?.company },
     salesperson: { ...d.salesperson, ...saved?.salesperson },
     pricing: { ...d.pricing, ...saved?.pricing },
   }

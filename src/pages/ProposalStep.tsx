@@ -211,7 +211,7 @@ export default function ProposalStep() {
             <div>
               <h2 className="text-xl font-bold">Create the proposal</h2>
               <p className="text-neutral-600">
-                Cover, all options with renderings, investment summary, next steps and signature lines. Valid {PROPOSAL.validDays} days.
+                Cover, all options with renderings, investment summary, product specifications, next steps and signature lines. Valid {PROPOSAL.validDays} days.
               </p>
             </div>
             <Button onClick={create} disabled={busy} className="min-w-48">
@@ -226,7 +226,7 @@ export default function ProposalStep() {
                 <div>
                   <div className="font-bold">{pdf.filename}</div>
                   <div className="text-sm text-neutral-500">
-                    Proposal {pdf.number} · {2 + included.length * 2} pages · {(pdf.blob.size / 1024 / 1024).toFixed(1)} MB
+                    Proposal {pdf.number} · {pdf.pages} pages · {(pdf.blob.size / 1024 / 1024).toFixed(1)} MB
                   </div>
                 </div>
               </div>

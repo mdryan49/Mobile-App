@@ -8,6 +8,7 @@ import { estimateFor, groupEstimate, groupsFor, money, moneyRange, WALL_LABELS, 
 import { activeVersion, availableLooks, lookName, lookSelection, lookWalls } from './looks'
 import { materialRows } from './materials'
 import { scopeToRoom } from './project'
+import { longestLead, specRows } from './specs'
 
 /**
  * Client-side proposal PDF (US Letter, portrait). Designed to print well:
@@ -96,6 +97,7 @@ export interface ProposalResult {
   blob: Blob
   filename: string
   number: string
+  pages: number
 }
 
 /** Which design options of a room go on the proposal, and which one is recommended. */
@@ -223,15 +225,31 @@ export async function buildProposalPdf(stored: StoredProject, settings: AppSetti
     doc.rect(x + 2, y + h - 6.5, tw, 4.5, 'F')
     text(label, x + 4, y + h - 3.3, { size: 6.5, bold: true, maxWidth: tw - 2 })
   }
+  const company = settings.company
+  // Uploaded logo (fit inside 60 x 12 mm), else the built-in mark + company name
+  let logo: { data: string; w: number; h: number } | null = null
+  if (company.logoDataUrl) {
+    try {
+      const props = doc.getImageProperties(company.logoDataUrl)
+      const scale = Math.min(60 / props.width, 12 / props.height)
+      logo = { data: company.logoDataUrl, w: props.width * scale, h: props.height * scale }
+    } catch {
+      logo = null
+    }
+  }
   const header = (title: string) => {
-    // Logo mark: accent square with a white house
-    doc.setFillColor(...ACCENT)
-    doc.roundedRect(M, 12, 11, 11, 2, 2, 'F')
-    doc.setFillColor(255, 255, 255)
-    doc.triangle(M + 2.3, 18.2, M + 5.5, 15, M + 8.7, 18.2, 'F')
-    doc.rect(M + 3.2, 18.1, 4.6, 3.1, 'F')
-    text(BRAND.name, M + 14, 17, { size: 13, bold: true })
-    text(BRAND.tagline, M + 14, 21.5, { size: 8.5, color: GRAY })
+    if (logo) {
+      doc.addImage(logo.data, 'PNG', M, 11 + (12 - logo.h) / 2, logo.w, logo.h, 'company-logo', 'FAST')
+    } else {
+      // Built-in mark: accent square with a white house
+      doc.setFillColor(...ACCENT)
+      doc.roundedRect(M, 12, 11, 11, 2, 2, 'F')
+      doc.setFillColor(255, 255, 255)
+      doc.triangle(M + 2.3, 18.2, M + 5.5, 15, M + 8.7, 18.2, 'F')
+      doc.rect(M + 3.2, 18.1, 4.6, 3.1, 'F')
+      text(BRAND.name, M + 14, 17, { size: 13, bold: true })
+      text(BRAND.tagline, M + 14, 21.5, { size: 8.5, color: GRAY })
+    }
     text(title, PAGE_W - M, 17, { size: 11, bold: true, align: 'right' })
     text(`Proposal ${number} | ${fmtDate(now)}`, PAGE_W - M, 21.5, { size: 8.5, color: GRAY, align: 'right' })
     rule(26, ACCENT, 0.8)
@@ -253,7 +271,7 @@ export async function buildProposalPdf(stored: StoredProject, settings: AppSetti
   const c = stored.customer
   const sp = settings.salesperson
   const forLines = [c.name || 'Homeowner', c.address, c.phone, c.email].filter(Boolean)
-  const byLines = [sp.name || BRAND.name, sp.phone || BRAND.phone, sp.email || BRAND.email, BRAND.website].filter(Boolean)
+  const byLines = [sp.name || BRAND.name, sp.name ? BRAND.name : '', sp.phone || BRAND.phone, sp.email || BRAND.email, company.licenseNumber].filter(Boolean)
   forLines.forEach((l, i) => text(l, M, y + i * 5, { size: i === 0 ? 12 : 10, bold: i === 0, maxWidth: CONTENT_W / 2 - 4 }))
   byLines.forEach((l, i) => text(l, col2, y + i * 5, { size: i === 0 ? 12 : 10, bold: i === 0, maxWidth: CONTENT_W / 2 - 4 }))
   y += Math.max(forLines.length, byLines.length) * 5 + 3
@@ -472,6 +490,65 @@ export async function buildProposalPdf(stored: StoredProject, settings: AppSetti
     }
     y += 4
     y = para(PROPOSAL.terms, M, y, CONTENT_W, 8.5, GRAY)
+
+    // ---------------- Selections & specifications (recommended option) ----------------
+    const rec = recOf(sec)
+    const specs = specRows(project, lookSelection(project, rec.look), settings.pricing)
+    if (specs.length) {
+      doc.addPage()
+      header(multi ? `${sec.label} Specifications` : 'Specifications')
+      y = 36
+      text('Selections & specifications', M, y, { size: 16, bold: true })
+      y += 6
+      text(`${rec.name}${multi ? ` (${sec.label})` : ''}`, M, y, { size: 10.5, color: GRAY, maxWidth: CONTENT_W })
+      y += 8
+      // Columns: Item | Product | SKU / code | Qty | Lead time | Supplied
+      const cols = [
+        { label: 'Item', w: 28 },
+        { label: 'Product', w: 52 },
+        { label: 'SKU / code', w: 40 },
+        { label: 'Qty', w: 18 },
+        { label: 'Lead time', w: 23 },
+        { label: 'Supplied', w: CONTENT_W - 161 },
+      ]
+      const drawRow = (cells: string[], bold: boolean, color: RGB) => {
+        let x = M
+        let lines = 1
+        const wrapped = cells.map((c, i) => {
+          doc.setFont('helvetica', bold ? 'bold' : 'normal')
+          doc.setFontSize(8)
+          const l = (doc.splitTextToSize(safe(c), cols[i].w - 2) as string[]).slice(0, 3)
+          lines = Math.max(lines, l.length)
+          return l
+        })
+        wrapped.forEach((l, i) => {
+          doc.setFont('helvetica', bold ? 'bold' : 'normal')
+          doc.setFontSize(8)
+          doc.setTextColor(...color)
+          doc.text(l, x, y)
+          x += cols[i].w
+        })
+        y += lines * 8 * PT * 1.3 + 2
+      }
+      drawRow(cols.map((c) => c.label.toUpperCase()), true, GRAY)
+      rule(y - 2.5, INK, 0.4)
+      y += 2
+      for (const r of specs) {
+        if (y > PAGE_H - 40) break // one page is plenty for a single room
+        drawRow([r.item, r.product, r.sku, r.qty, r.leadTime, r.supply], false, INK)
+        rule(y - 2.5)
+        y += 2
+      }
+      const longest = longestLead(specs)
+      y += 3
+      if (longest) {
+        y = para(`Longest lead time: ${longest.leadTime} (${longest.item.toLowerCase()}). Installation is scheduled once materials are confirmed.`, M, y, CONTENT_W, 9, INK, true) + 1
+      }
+      y = para(
+        'Allowance items are budgets for materials you choose later; the final price is adjusted up or down to your actual selection. Customer-supplied items are purchased by you and installed by us. Quantities are estimates and are confirmed at the final measure.',
+        M, y, CONTENT_W, 8.5, GRAY,
+      )
+    }
   }
 
   // ---------------- Next steps & approval ----------------
@@ -545,7 +622,7 @@ export async function buildProposalPdf(stored: StoredProject, settings: AppSetti
     doc.setPage(i)
     text(SAMPLE_PRICING_NOTICE.toUpperCase(), PAGE_W / 2, PAGE_H - 16.5, { size: 7.5, bold: true, align: 'center' })
     rule(PAGE_H - 14)
-    text(`${BRAND.name} | ${BRAND.phone} | ${BRAND.website}`, M, PAGE_H - 9.5, { size: 7.5, color: GRAY })
+    text([BRAND.name, BRAND.phone, BRAND.website, company.licenseNumber].filter(Boolean).join(' | '), M, PAGE_H - 9.5, { size: 7.5, color: GRAY })
     text(`Page ${i} of ${pages}`, PAGE_W - M, PAGE_H - 9.5, { size: 7.5, color: GRAY, align: 'right' })
   }
 
@@ -554,5 +631,6 @@ export async function buildProposalPdf(stored: StoredProject, settings: AppSetti
     blob: doc.output('blob'),
     filename: `${BRAND.shortName.replace(/\s+/g, '-')}-Proposal-${who}-${number}.pdf`,
     number,
+    pages,
   }
 }

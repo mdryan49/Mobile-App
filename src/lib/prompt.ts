@@ -1,4 +1,4 @@
-import { COUNTERTOP_LOOKS, resolveSelection, type Selection } from '../config/catalog'
+import { COUNTERTOP_LOOKS, resolveSelection, type ProductField, type Selection } from '../config/catalog'
 import type { RoomType, WallChange } from '../types'
 
 /**
@@ -44,8 +44,18 @@ function describe(sel: Selection, room: RoomType = 'kitchen'): Partial<Record<Ch
   } else if (r.cabinetFinish || r.doorStyle) {
     out.cabinets = `the existing cabinets${r.cabinetFinish ? ` refinished in ${r.cabinetFinish.promptText}` : ''}${r.doorStyle ? `, with ${r.doorStyle.promptText}` : ', same door style'}`
   }
+  // Two-tone island: say it explicitly, or the AI paints everything one color
+  if (r.islandFinish && r.islandFinish.id !== r.cabinetFinish?.id) {
+    const island = `the kitchen island cabinets in a contrasting ${r.islandFinish.promptText} finish`
+    out.cabinets = out.cabinets ? `${out.cabinets}; ${island} (perimeter and island are different colors)` : `${island}; perimeter cabinets stay as they are`
+  }
   if (r.hardwareFinish) out.hardware = `${r.hardwareFinish.promptText} cabinet pulls and knobs`
-  if (r.countertop) out.countertop = `${r.countertop.material.toLowerCase()} countertops: ${COUNTERTOP_LOOKS[r.countertop.id] ?? r.countertop.name}, polished, with a clean eased edge`
+  const top = (c: NonNullable<typeof r.countertop>) => `${c.material.toLowerCase()}: ${COUNTERTOP_LOOKS[c.id] ?? c.name}, polished, with a clean eased edge`
+  if (r.countertop) out.countertop = `countertops of ${top(r.countertop)}`
+  if (r.islandCountertop && r.islandCountertop.id !== r.countertop?.id) {
+    const island = `the island countertop in a different material: ${top(r.islandCountertop)}`
+    out.countertop = out.countertop ? `perimeter ${out.countertop}; ${island}` : `${island}; perimeter countertops stay as they are`
+  }
   if (r.backsplash) out.backsplash = `backsplash of ${r.backsplash.promptText}`
   if (r.sinkFaucet) out.sink = `${r.sinkFaucet.promptText}${r.faucetFinish ? `, faucet in ${r.faucetFinish.promptText}` : ''}`
   else if (r.faucetFinish) out.sink = `the existing sink with a faucet in ${r.faucetFinish.promptText}`
@@ -164,7 +174,9 @@ export function fullRenderPrompt(sel: Selection, declutter: boolean, walls: Wall
 }
 
 /** Which visible finish each selection field controls (cabinet line and lighting affect price, not the picture). */
-const KITCHEN_FIELDS: Partial<Record<keyof Selection, ChangeKey>> = {
+const KITCHEN_FIELDS: Partial<Record<ProductField, ChangeKey>> = {
+  islandCabinetFinishId: 'cabinets',
+  islandCountertopId: 'countertop',
   cabinetLineId: 'cabinets',
   cabinetFinishId: 'cabinets',
   doorStyleId: 'cabinets',
@@ -177,7 +189,7 @@ const KITCHEN_FIELDS: Partial<Record<keyof Selection, ChangeKey>> = {
   flooringId: 'flooring',
 }
 
-const BATH_FIELDS: Partial<Record<keyof Selection, ChangeKey>> = {
+const BATH_FIELDS: Partial<Record<ProductField, ChangeKey>> = {
   vanityId: 'vanity',
   cabinetFinishId: 'vanity',
   doorStyleId: 'vanity',
@@ -202,7 +214,7 @@ export const fieldsToChange = (room: RoomType = 'kitchen') => (room === 'bath' ?
  */
 export function pendingChanges(rendered: Selection, current: Selection, renderedWalls = false, currentWalls = false, room: RoomType = 'kitchen'): ChangeKey[] {
   const out = new Set<ChangeKey>()
-  for (const [field, change] of Object.entries(fieldsToChange(room)) as [keyof Selection, ChangeKey][]) {
+  for (const [field, change] of Object.entries(fieldsToChange(room)) as [ProductField, ChangeKey][]) {
     if (rendered[field] !== current[field]) out.add(change)
   }
   if (renderedWalls !== currentWalls) out.add('walls')

@@ -53,6 +53,8 @@ export async function createDemoProject(): Promise<StoredProject> {
     flooringSqft: 260,
     paintSqft: 340,
     permits: true,
+    appliances: ['range', 'hood', 'dishwasher'],
+    removeFlooring: true,
   })
   // Two sample options: a full replacement, and a budget refresh that keeps what's working
   p.designs = [
@@ -73,6 +75,9 @@ export async function createDemoProject(): Promise<StoredProject> {
         paintId: 'sw-alabaster',
         flooringId: 'fl-eng-white-oak',
         lightingId: 'lt-recessed-ucl',
+        islandCabinetFinishId: 'navy',
+        accessoryIds: ['acc-deep-drawers', 'acc-swing-corner', 'acc-end-panels'],
+        supply: { sinkFaucetId: { mode: 'allowance', amount: 1200 } },
       },
     },
     {

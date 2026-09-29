@@ -77,6 +77,26 @@ hardware, wall paint, flooring, lighting) pick a product, or leave it on **Keep 
 - Change something after rendering and tap **Update picture**. Additions are edited onto the current rendering;
   going back to "keep existing" or changing walls re-renders from the original photo.
 
+## Company details: license # and logo
+
+Settings (PIN) → **Company**: enter your **contractor license number** (e.g. "CSLB #123456") and upload a **logo**
+(PNG with a transparent background prints best). Both are saved on that iPad only (never in the code) and print on
+the cover and footer of every proposal. Leave them blank to use the built-in Ryan Brothers mark and hide the license line.
+
+## Proposal extras (Phase A)
+
+- **Two-tone kitchens:** "Island color" and "Island top" appear on the Design step when the kitchen has an island.
+  "Same as perimeter" is the default. Priced separately (island cabinets = island length; island top = length × width).
+- **Cabinet accessories:** pick several (deep drawers, roll-outs, swing-out corner, trash pull-out, glass doors, end panels, crown).
+- **Allowances & customer-supplied items:** for flooring, backsplash/shower tile, sink & faucet, lighting, vanity,
+  toilet, glass and bath lighting, choose **We supply** / **Allowance** ($ budget for materials, client picks later) /
+  **Customer supplies** (install only). Install labor still applies. Starting allowance amounts: `DEFAULT_ALLOWANCE` in the catalog.
+- **Construction (Scope step):** windows to replace (allowance + install each), drywall & texture sq ft, remove existing
+  flooring (priced when an option has new flooring), and **appliances we install** (kitchen).
+- **Project fee:** charged once per consultation (on the first room). Set it in Settings.
+- **Selections & specifications page** in the PDF for each room's recommended option: product, SKU, quantity,
+  lead time and who supplies it, plus the longest lead time.
+
 ## Baths (full bath remodel)
 
 The bath uses the same flow: photos, **bath measurements** (floor area, vanity width, shower wall tile, paint area,
@@ -123,6 +143,9 @@ Rename your suppliers once in `SUPPLIERS` at the top of the file.
 | `SHOWER_SYSTEMS` | per package (tub/base, valve, drain); tiled walls add tile + install + waterproofing |
 | `SHOWER_GLASS`, `TOILETS`, `BATH_LIGHTING` | each / per package |
 
+- Every item can carry `sku` (part number) and `leadTime`. The catalog fills in placeholders
+  (`SAMPLE-...` SKUs and typical lead times) at the bottom of the file: replace them with your suppliers' real values.
+- `CABINET_ACCESSORIES` (each, installed) and `APPLIANCES` (install price per appliance in Settings).
 - Products can be limited to one room with `rooms: ['bath']` or `rooms: ['kitchen']` (e.g. hardwood is kitchen-only, hex mosaic is bath-only).
 - Bath suppliers are **placeholders**: rename `vanities`, `bathFixtures` and `glass` in `SUPPLIERS`.
 

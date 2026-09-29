@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { BeforeAfter } from '../components/BeforeAfter'
 import { RenderError, RenderingOverlay } from '../components/RenderStatus'
 import { Swatch } from '../components/Swatch'
-import { Button, ConfirmDialog, SamplePricingBadge, TextInput, Toggle } from '../components/ui'
+import { Button, ConfirmDialog, Field, NumberInput, SamplePricingBadge, TextInput, Toggle } from '../components/ui'
 import { VersionStrip } from '../components/VersionStrip'
 import {
   BACKSPLASHES,
@@ -21,10 +21,16 @@ import {
   SHOWER_SYSTEMS,
   TOILETS,
   VANITIES,
+  CABINET_ACCESSORIES,
+  DEFAULT_ALLOWANCE,
   METAL_FINISHES,
   PAINT_COLORS,
-  SINK_FAUCETS,
+  SUPPLY_FIELDS,
   type Selection,
+  type SupplyChoice,
+  type SupplyField,
+  SINK_FAUCETS,
+  type ProductField,
   type Swatch as SwatchT,
 } from '../config/catalog'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
@@ -48,13 +54,18 @@ interface Option {
 }
 
 interface Category {
-  field: keyof Selection
+  /** 'accessoryIds' is a pick-several list; everything else is pick-one */
+  field: ProductField | 'accessoryIds'
   label: string
   /** What "nothing chosen" means for this category */
   keepLabel: string
   keepHint: string
   options: Option[]
+  /** Only shown when the kitchen has an island */
+  islandOnly?: boolean
 }
+
+const isSupplyField = (f: Category['field']): f is SupplyField => (SUPPLY_FIELDS as string[]).includes(f)
 
 const countertopOption = (c: (typeof COUNTERTOPS)[number]): Option => ({ id: c.id, name: c.name, sub: `${c.brand} ${c.material.toLowerCase()} · ${c.supplier}`, swatch: c.swatch })
 const tileOption = (b: (typeof BACKSPLASHES)[number]): Option => ({ id: b.id, name: b.name, sub: `${b.style} · ${b.supplier}`, swatch: b.swatch })
@@ -78,7 +89,19 @@ const KITCHEN_CATEGORIES: Category[] = [
     options: CABINET_FINISHES.map((f) => ({ id: f.id, name: f.name, swatch: f.swatch })),
   },
   {
+    field: 'islandCabinetFinishId', label: 'Island color', keepLabel: 'Same as perimeter', keepHint: 'Island matches the other cabinets', islandOnly: true,
+    options: CABINET_FINISHES.map((f) => ({ id: f.id, name: f.name, swatch: f.swatch })),
+  },
+  {
+    field: 'accessoryIds', label: 'Accessories', keepLabel: '', keepHint: '',
+    options: CABINET_ACCESSORIES.filter(offeredIn('kitchen')).map((a) => ({ id: a.id, name: a.name, sub: a.description })),
+  },
+  {
     field: 'countertopId', label: 'Countertop', keepLabel: 'Keep existing', keepHint: 'Current countertops stay',
+    options: COUNTERTOPS.filter(offeredIn('kitchen')).map(countertopOption),
+  },
+  {
+    field: 'islandCountertopId', label: 'Island top', keepLabel: 'Same as perimeter', keepHint: 'Island top matches the counters', islandOnly: true,
     options: COUNTERTOPS.filter(offeredIn('kitchen')).map(countertopOption),
   },
   {
@@ -263,21 +286,41 @@ function DesignEditor({
   const activeUrl = usePhotoUrl(active?.id)
   const job = hero ? jobs.get(jobKey(project.id, design.id, hero.id)) : undefined
   const plan = hero ? planRender(project, design.id, hero.id) : null
-  const categories = project.roomType === 'bath' ? BATH_CATEGORIES : KITCHEN_CATEGORIES
+  const categories = (project.roomType === 'bath' ? BATH_CATEGORIES : KITCHEN_CATEGORIES).filter((c) => !c.islandOnly || m.hasIsland)
   const cat = categories[Math.min(catIdx, categories.length - 1)]
+  const multi = cat.field === 'accessoryIds'
+  const supply = isSupplyField(cat.field) ? sel.supply?.[cat.field] : undefined
+
+  /** The selection with one option picked (pick-one) or toggled (pick-several). */
+  const withOption = (c: Category, id: string | null): Selection => {
+    if (c.field === 'accessoryIds') {
+      const has = id !== null && sel.accessoryIds.includes(id)
+      return { ...sel, accessoryIds: has ? sel.accessoryIds.filter((x) => x !== id) : id ? [...sel.accessoryIds, id] : [] }
+    }
+    return { ...sel, [c.field]: id }
+  }
 
   // Price difference of every choice vs. the current one, so you can say "that's +$1,200"
   const deltas = useMemo(() => {
     const out = new Map<string | null, number>()
     for (const id of [null, ...cat.options.map((o) => o.id)]) {
-      out.set(id, estimateFor(project, { ...sel, [cat.field]: id }, pricing, walls).total - est.total)
+      out.set(id, estimateFor(project, withOption(cat, id), pricing, walls).total - est.total)
     }
     return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cat, m, sel, pricing, walls, est.total])
 
   const patch = (p: Partial<Design>) => update((pr) => ({ ...pr, designs: pr.designs.map((d) => (d.id === design.id ? { ...d, ...p } : d)) }))
-  const choose = (field: keyof Selection, id: string | null) => patch({ selection: { ...sel, [field]: id } })
-  const chosenCount = categories.filter((c) => sel[c.field]).length
+  const choose = (c: Category, id: string | null) => patch({ selection: withOption(c, id) })
+  const setSupply = (field: SupplyField, choice: SupplyChoice | null) => {
+    const next = { ...sel.supply }
+    if (choice) next[field] = choice
+    else delete next[field]
+    patch({ selection: { ...sel, supply: next } })
+  }
+  const isChosen = (c: Category) =>
+    c.field === 'accessoryIds' ? sel.accessoryIds.length > 0 : !!sel[c.field] || (isSupplyField(c.field) && !!sel.supply?.[c.field])
+  const chosenCount = categories.filter(isChosen).length
 
   async function render(fresh = false) {
     if (!hero) return
@@ -398,33 +441,41 @@ function DesignEditor({
                 }`}
               >
                 {c.label}
-                {sel[c.field] && <span className={`ml-1.5 inline-block h-2 w-2 rounded-full align-middle ${i === catIdx ? 'bg-white' : 'bg-accent'}`} />}
+                {isChosen(c) && <span className={`ml-1.5 inline-block h-2 w-2 rounded-full align-middle ${i === catIdx ? 'bg-white' : 'bg-accent'}`} />}
               </button>
             ))}
           </div>
+          {isSupplyField(cat.field) && <SupplyPicker field={cat.field} value={supply} onChange={(c) => setSupply(cat.field as SupplyField, c)} />}
+          {multi && <p className="px-4 pt-3 text-sm text-neutral-600">Tap to add or remove. Pick as many as you like.</p>}
           <ul className="grid grid-cols-2 gap-3 p-3 md:grid-cols-3 lg:grid-cols-2">
-            <li>
-              <OptionCard
-                name={cat.keepLabel}
-                sub={cat.keepHint}
-                selected={sel[cat.field] === null}
-                delta={deltas.get(null) ?? 0}
-                onClick={() => choose(cat.field, null)}
-                keep
-              />
-            </li>
-            {cat.options.map((o) => (
-              <li key={o.id}>
+            {!multi && (
+              <li>
                 <OptionCard
-                  name={o.name}
-                  sub={o.sub}
-                  swatch={o.swatch}
-                  selected={sel[cat.field] === o.id}
-                  delta={deltas.get(o.id) ?? 0}
-                  onClick={() => choose(cat.field, o.id)}
+                  name={supply ? (supply.mode === 'allowance' ? "Client's choice" : 'Customer picks it') : cat.keepLabel}
+                  sub={supply ? 'Product not chosen yet' : cat.keepHint}
+                  selected={sel[cat.field as ProductField] === null}
+                  delta={deltas.get(null) ?? 0}
+                  onClick={() => choose(cat, null)}
+                  keep
                 />
               </li>
-            ))}
+            )}
+            {cat.options.map((o) => {
+              const selected = multi ? sel.accessoryIds.includes(o.id) : sel[cat.field as ProductField] === o.id
+              return (
+                <li key={o.id}>
+                  <OptionCard
+                    name={o.name}
+                    sub={o.sub}
+                    swatch={o.swatch}
+                    selected={selected}
+                    delta={deltas.get(o.id) ?? 0}
+                    onClick={() => choose(cat, o.id)}
+                    toggle={multi}
+                  />
+                </li>
+              )
+            })}
           </ul>
           {cat.options.length === 0 && <p className="px-4 pb-4 text-sm text-neutral-500">No available products in this category. Add them to the catalog file.</p>}
         </div>
@@ -441,6 +492,7 @@ function OptionCard({
   delta,
   onClick,
   keep,
+  toggle,
 }: {
   name: string
   sub?: string
@@ -449,6 +501,8 @@ function OptionCard({
   delta: number
   onClick: () => void
   keep?: boolean
+  /** Pick-several card: shows the price of adding/removing it */
+  toggle?: boolean
 }) {
   return (
     <button
@@ -462,7 +516,7 @@ function OptionCard({
       {sub && <span className="text-[13px] leading-snug text-neutral-500">{sub}</span>}
       <span className="mt-auto pt-1.5 text-right text-[13px] font-semibold tabular-nums">
         <span className={selected ? 'text-accent' : delta > 0 ? 'text-neutral-700' : delta < 0 ? 'text-green-700' : 'text-neutral-400'}>
-          {selected ? '✓ Selected' : delta === 0 ? 'No change' : `${delta > 0 ? '+' : '−'}${money(Math.abs(delta))}`}
+          {selected && !toggle ? '✓ Selected' : delta === 0 ? 'No change' : `${selected ? '✓ Added · ' : ''}${delta > 0 ? '+' : '−'}${money(Math.abs(delta))}`}
         </span>
       </span>
     </button>
@@ -474,5 +528,42 @@ export function ConceptBadge() {
     <span className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-amber-400 px-3 py-1 text-sm font-bold text-black shadow">
       Concept only: wall removal subject to structural review
     </span>
+  )
+}
+
+const SUPPLY_MODES: { key: 'we' | 'allowance' | 'owner'; label: string; hint: string }[] = [
+  { key: 'we', label: 'We supply', hint: 'Priced from the catalog' },
+  { key: 'allowance', label: 'Allowance', hint: 'Set budget, client picks later' },
+  { key: 'owner', label: 'Customer supplies', hint: 'We install only' },
+]
+
+/** We supply it (default) / allowance budget / customer buys it and we install it. */
+function SupplyPicker({ field, value, onChange }: { field: SupplyField; value?: SupplyChoice; onChange: (c: SupplyChoice | null) => void }) {
+  const current = value?.mode ?? 'we'
+  return (
+    <div className="border-b-2 border-neutral-100 p-3">
+      <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Who supplies it">
+        {SUPPLY_MODES.map((m) => (
+          <button
+            key={m.key}
+            type="button"
+            role="radio"
+            aria-checked={current === m.key}
+            onClick={() => onChange(m.key === 'we' ? null : m.key === 'owner' ? { mode: 'owner' } : { mode: 'allowance', amount: value?.mode === 'allowance' ? value.amount : DEFAULT_ALLOWANCE[field] })}
+            className={`min-h-14 rounded-xl border-2 px-2 py-1.5 text-left ${current === m.key ? 'border-accent bg-accent/5' : 'border-neutral-200 active:bg-neutral-50'}`}
+          >
+            <span className={`block text-[15px] leading-tight font-semibold ${current === m.key ? 'text-accent' : ''}`}>{m.label}</span>
+            <span className="block text-xs leading-snug text-neutral-500">{m.hint}</span>
+          </button>
+        ))}
+      </div>
+      {value?.mode === 'allowance' && (
+        <div className="mt-3">
+          <Field label="Allowance (materials)" hint="Installation is priced separately, as usual">
+            <NumberInput value={value.amount} onChange={(amount) => onChange({ mode: 'allowance', amount })} suffix="$" />
+          </Field>
+        </div>
+      )}
+    </div>
   )
 }

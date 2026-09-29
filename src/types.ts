@@ -19,7 +19,17 @@ export interface PhotoRef {
 export type Layout = 'l-shape' | 'u-shape' | 'galley' | 'single-wall'
 export type DemoScope = 'full-gut' | 'cabinets-counters' | 'refresh'
 
-export interface Measurements {
+/** Construction items that apply to every design option of a room. */
+export interface SharedScope {
+  /** Windows replaced (allowance + install each, from Settings) */
+  windowCount: number
+  /** New or patched drywall incl. texture */
+  drywallSqft: number
+  /** Remove the existing floor (priced when an option includes new flooring) */
+  removeFlooring: boolean
+}
+
+export type Measurements = {
   layout: Layout
   hasIsland: boolean
   baseCabinetLf: number
@@ -39,7 +49,9 @@ export interface Measurements {
   /** Wall area priced when a design includes wall paint */
   paintSqft: number
   permits: boolean
-}
+  /** Appliances we install (homeowner-provided or reinstalled), see APPLIANCES in catalog */
+  appliances: string[]
+} & SharedScope
 
 /** A design option id (renderings and estimates are keyed by it). */
 export type LookKey = string
@@ -93,7 +105,7 @@ export type RoomType = 'kitchen' | 'bath'
 export type BathDemoScope = 'full-gut' | 'partial'
 
 /** Full bath remodel measurements. */
-export interface BathMeasurements {
+export type BathMeasurements = {
   floorSqft: number
   vanityWidthIn: number
   /** Tiled shower/tub walls */
@@ -106,7 +118,7 @@ export interface BathMeasurements {
   exhaustFan: boolean
   heatedFloor: boolean
   permits: boolean
-}
+} & SharedScope
 
 /** Everything that belongs to one room of a consultation. */
 export interface RoomData {
@@ -152,6 +164,8 @@ export interface Project extends Omit<StoredProject, 'rooms'>, Omit<RoomData, 'i
   roomId: string
   roomType: RoomType
   roomName: string
+  /** The project fee is charged once per consultation, on the first room */
+  isFirstRoom: boolean
 }
 
 export interface StoredPhoto {

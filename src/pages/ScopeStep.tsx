@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { APPLIANCES } from '../config/catalog'
 import { WallEditor, newWall } from '../components/WallEditor'
 import { Button, ChoiceGroup, Field, NumberInput, Toggle } from '../components/ui'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
@@ -6,7 +7,7 @@ import { money, wallCost, WALL_LABELS } from '../lib/estimate'
 import { newId } from '../lib/id'
 import { useSettings } from '../lib/settings'
 import { applyBathSuggestions, applySuggestions, DEFAULT_SHOWER_TILE_SQFT, suggestedBacksplashSqft, suggestedCountertopSqft } from '../lib/project'
-import type { BathDemoScope, BathMeasurements, DemoScope, Layout, Measurements, WallChange } from '../types'
+import type { BathDemoScope, BathMeasurements, DemoScope, Layout, Measurements, SharedScope, WallChange } from '../types'
 import { useProjectContext } from './ProjectLayout'
 
 const LAYOUTS: { value: Layout; label: string; hint: string }[] = [
@@ -74,6 +75,8 @@ function BathScope() {
       </div>
 
       <WallsSection />
+
+      <ConstructionFields value={b} onChange={set} />
 
       <div className="space-y-4">
         <h2 className="text-xl font-bold">Additional work</h2>
@@ -171,6 +174,30 @@ function KitchenScope() {
       </div>
 
       <WallsSection />
+
+      <ConstructionFields value={m} onChange={set} />
+
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold">Appliances we install</h2>
+        <p className="-mt-2 text-neutral-600">Customer-provided or reinstalled. Priced per appliance in Settings.</p>
+        <div className="flex flex-wrap gap-2">
+          {APPLIANCES.map((a) => {
+            const on = m.appliances.includes(a.id)
+            return (
+              <button
+                key={a.id}
+                type="button"
+                aria-pressed={on}
+                onClick={() => set({ appliances: on ? m.appliances.filter((x) => x !== a.id) : [...m.appliances, a.id] })}
+                className={`min-h-12 rounded-full border-2 px-4 font-semibold ${on ? 'border-accent bg-accent text-white' : 'border-neutral-200 active:bg-neutral-50'}`}
+              >
+                {on ? '✓ ' : ''}
+                {a.name}
+              </button>
+            )
+          })}
+        </div>
+      </div>
 
       <div className="space-y-4">
         <h2 className="text-xl font-bold">Additional work</h2>
@@ -315,5 +342,28 @@ function PhotoButton({ photoId, label, onClick }: { photoId: string; label: stri
         </div>
       </button>
     </li>
+  )
+}
+
+/** Windows, drywall and flooring removal: the same for every design option in the room. */
+function ConstructionFields({ value, onChange }: { value: SharedScope; onChange: (patch: Partial<SharedScope>) => void }) {
+  return (
+    <div className="space-y-4">
+      <h2 className="text-xl font-bold">Construction</h2>
+      <div className="grid gap-5 md:grid-cols-2">
+        <Field label="Windows to replace" hint="Allowance + install per window (Settings)">
+          <NumberInput value={value.windowCount} onChange={(windowCount) => onChange({ windowCount: Math.round(windowCount) })} suffix="windows" />
+        </Field>
+        <Field label="Drywall & texture" hint="New or patched drywall, e.g. behind a new backsplash">
+          <NumberInput value={value.drywallSqft} onChange={(drywallSqft) => onChange({ drywallSqft })} suffix="sq ft" />
+        </Field>
+      </div>
+      <Toggle
+        label="Remove existing flooring"
+        hint="Priced in options that include new flooring"
+        checked={value.removeFlooring}
+        onChange={(removeFlooring) => onChange({ removeFlooring })}
+      />
+    </div>
   )
 }

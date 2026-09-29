@@ -19,6 +19,10 @@ export const DEFAULT_MEASUREMENTS: Measurements = {
   flooringSqft: 0,
   paintSqft: 0,
   permits: true,
+  appliances: [],
+  windowCount: 0,
+  drywallSqft: 0,
+  removeFlooring: false,
 }
 
 /** Standard counter depth is 25.5" plus overhang ≈ 26" → 26/12 sq ft per linear foot. */
@@ -70,6 +74,9 @@ export const DEFAULT_BATH: BathMeasurements = {
   exhaustFan: true,
   heatedFloor: false,
   permits: true,
+  windowCount: 0,
+  drywallSqft: 0,
+  removeFlooring: false,
 }
 
 /** A standard 5 ft tub/shower alcove tiled to 8 ft: 3 walls ≈ 5×8 + 2×(2.5×8) ≈ 80 sq ft. */
@@ -116,12 +123,12 @@ export function scopeToRoom(s: StoredProject, roomId?: string): Project {
   const room = s.rooms.find((r) => r.id === roomId) ?? s.rooms[0]
   const { id: roomIdValue, type, name, ...roomData } = room
   const { rooms: _rooms, ...common } = s
-  return { ...common, ...roomData, roomId: roomIdValue, roomType: type, roomName: name }
+  return { ...common, ...roomData, roomId: roomIdValue, roomType: type, roomName: name, isFirstRoom: s.rooms[0]?.id === roomIdValue }
 }
 
 /** Write a room-scoped view back into the stored consultation. */
 export function unscope(s: StoredProject, p: Project): StoredProject {
-  const { roomId, roomType, roomName, photos, heroPhotoId, measurements, bath, designs, walls, renders, activeRender, recommended, declutter, ...common } = p
+  const { roomId, roomType, roomName, isFirstRoom: _first, photos, heroPhotoId, measurements, bath, designs, walls, renders, activeRender, recommended, declutter, ...common } = p
   return {
     ...s,
     ...common,

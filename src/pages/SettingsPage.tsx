@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { PinPad } from '../components/PinPad'
 import { setStaffUnlocked, useStaffUnlocked } from '../lib/pinLock'
 import { useNavigate } from 'react-router-dom'
-import { Button, ConfirmDialog, Field, NumberInput, SamplePricingBadge, TextInput } from '../components/ui'
-import { DEFAULT_SETTINGS, type AppSettings, type PricingSettings } from '../config/defaultSettings'
+import { Button, ConfirmDialog, Field, Logo, NumberInput, SamplePricingBadge, TextInput } from '../components/ui'
+import { DEFAULT_SETTINGS, type AppSettings, type CompanySettings, type PricingSettings } from '../config/defaultSettings'
 import { useSettings } from '../lib/settings'
 
 export default function SettingsPage() {
@@ -72,12 +72,26 @@ const SECTIONS: { title: string; fields: { key: NumKey; label: string; suffix: s
     fields: [
       { key: 'tileInstallPerSqft', label: 'Tile install', suffix: '$/sqft' },
       { key: 'sinkFaucetInstall', label: 'Sink & faucet install', suffix: '$' },
+      { key: 'flooringInstallPerSqft', label: 'Flooring install only', suffix: '$/sqft', hint: 'Allowance or customer-supplied flooring' },
+      { key: 'lightingInstallOnly', label: 'Lighting install only (kitchen)', suffix: '$' },
+      { key: 'bathLightInstallOnly', label: 'Mirror & light install only (bath)', suffix: '$' },
       { key: 'plumbingReconnect', label: 'Plumbing reconnect', suffix: '$' },
       { key: 'plumbingRelocate', label: 'Plumbing relocate (add)', suffix: '$' },
       { key: 'electricalReconnect', label: 'Electrical reconnect', suffix: '$' },
       { key: 'electricalUpdates', label: 'Electrical updates (add)', suffix: '$' },
       { key: 'paintPerSqft', label: 'Wall paint', suffix: '$/sqft' },
       { key: 'permits', label: 'Permits', suffix: '$' },
+      { key: 'projectFee', label: 'Project fee', suffix: '$', hint: 'Once per consultation' },
+    ],
+  },
+  {
+    title: 'Construction',
+    fields: [
+      { key: 'windowAllowance', label: 'Window allowance (each)', suffix: '$', hint: 'Dual-pane window, client choice' },
+      { key: 'windowInstall', label: 'Window install (each)', suffix: '$', hint: 'Nail-fin install, flashing, trim' },
+      { key: 'drywallPerSqft', label: 'Drywall & texture', suffix: '$/sqft' },
+      { key: 'floorRemovalPerSqft', label: 'Flooring removal', suffix: '$/sqft' },
+      { key: 'applianceInstallEach', label: 'Appliance install (each)', suffix: '$', hint: 'Customer-provided or reinstalled' },
     ],
   },
   {
@@ -142,6 +156,14 @@ function SettingsForm() {
         </div>
         <SamplePricingBadge />
       </div>
+
+      <CompanySection
+        company={draft.company}
+        onChange={(company) => {
+          setStatus('idle')
+          setDraft((d) => ({ ...d, company }))
+        }}
+      />
 
       <section className="space-y-4">
         <h3 className="text-xl font-bold">Salesperson (printed on proposals)</h3>
@@ -234,5 +256,68 @@ function SettingsForm() {
         onCancel={() => setConfirmReset(false)}
       />
     </div>
+  )
+}
+
+const MAX_LOGO_BYTES = 400_000
+
+/** License number and logo: entered here on the iPad, printed on every proposal. */
+function CompanySection({ company, onChange }: { company: CompanySettings; onChange: (c: CompanySettings) => void }) {
+  const [error, setError] = useState<string | null>(null)
+
+  async function pickLogo(file: File | undefined) {
+    setError(null)
+    if (!file) return
+    try {
+      // Shrink to a sensible header size and keep transparency (PNG)
+      const url = URL.createObjectURL(file)
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const i = new Image()
+        i.onload = () => resolve(i)
+        i.onerror = () => reject(new Error('That file is not an image.'))
+        i.src = url
+      })
+      const scale = Math.min(1, 600 / img.naturalWidth, 240 / img.naturalHeight)
+      const c = document.createElement('canvas')
+      c.width = Math.round(img.naturalWidth * scale)
+      c.height = Math.round(img.naturalHeight * scale)
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+      URL.revokeObjectURL(url)
+      const dataUrl = c.toDataURL('image/png')
+      if (dataUrl.length > MAX_LOGO_BYTES) throw new Error('That logo is too detailed. Try a simpler PNG or JPEG.')
+      onChange({ ...company, logoDataUrl: dataUrl })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not use that image.')
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      <h3 className="text-xl font-bold">Company (printed on proposals)</h3>
+      <div className="grid gap-5 md:grid-cols-2">
+        <Field label="Contractor license #" hint='e.g. "CSLB #123456". Leave blank to hide.'>
+          <TextInput value={company.licenseNumber} onChange={(e) => onChange({ ...company, licenseNumber: e.target.value })} autoComplete="off" />
+        </Field>
+        <div>
+          <span className="mb-1.5 block text-sm font-semibold tracking-wide text-neutral-600 uppercase">Logo</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex h-16 min-w-32 items-center justify-center rounded-xl border-2 border-neutral-200 bg-white px-3">
+              {company.logoDataUrl ? <img src={company.logoDataUrl} alt="Company logo" className="max-h-12 max-w-48" /> : <span className="flex items-center gap-2 font-bold"><Logo className="h-9 w-9" /> Built-in</span>}
+            </div>
+            <label className="inline-flex min-h-12 cursor-pointer items-center rounded-xl border-2 border-neutral-200 px-4 font-semibold active:bg-neutral-100">
+              Upload logo
+              <input type="file" accept="image/png,image/jpeg" hidden onChange={(e) => void pickLogo(e.target.files?.[0])} />
+            </label>
+            {company.logoDataUrl && (
+              <Button variant="ghost" onClick={() => onChange({ ...company, logoDataUrl: '' })}>
+                Use built-in
+              </Button>
+            )}
+          </div>
+          {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
+          <p className="mt-1 text-sm text-neutral-500">PNG with a transparent background looks best in print.</p>
+        </div>
+      </div>
+    </section>
   )
 }

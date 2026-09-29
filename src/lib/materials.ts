@@ -1,4 +1,4 @@
-import { resolveSelection, type Selection, type Swatch } from '../config/catalog'
+import { resolveSelection, type Selection, type SupplyField, type Swatch } from '../config/catalog'
 import type { RoomType } from '../types'
 
 export interface MaterialRow {
@@ -16,6 +16,13 @@ export function materialRows(selection: Selection, opts: { hideKept?: boolean; r
   const r = resolveSelection(selection)
   const row = (label: string, text: string | undefined, swatch?: Swatch): MaterialRow =>
     text ? { label, text, swatch, kept: false } : { label, text: KEEP_EXISTING, kept: true }
+  /** Adds "allowance $X" / "customer-supplied" to items that aren't simply supplied by us */
+  const supplied = (field: SupplyField, text: string | undefined): string | undefined => {
+    const c = selection.supply?.[field]
+    if (!c) return text
+    if (c.mode === 'owner') return `${text ?? "Customer's choice"} · customer-supplied, we install`
+    return `${text ?? "Client's choice"} · allowance $${c.amount.toLocaleString('en-US')}`
+  }
 
   if (opts.room === 'bath') {
     const vanityText = r.vanity
@@ -23,21 +30,23 @@ export function materialRows(selection: Selection, opts: { hideKept?: boolean; r
       : r.cabinetFinish
         ? `Refinish existing in ${r.cabinetFinish.name}`
         : undefined
+    const tileText = supplied('backsplashId', r.backsplash?.name)
+    const glassText = supplied('glassId', r.glass?.name.toLowerCase())
     const showerText = r.shower
-      ? `${r.shower.name}${r.shower.tiled ? `, ${r.backsplash ? r.backsplash.name : 'tile to be selected'}` : ''}${r.glass ? `, ${r.glass.name.toLowerCase()}` : ''}`
-      : r.backsplash
-        ? `Re-tile existing: ${r.backsplash.name}`
-        : undefined
+      ? `${r.shower.name}${r.shower.tiled ? `, ${tileText ?? 'tile allowance'}` : ''}${glassText ? `, ${glassText}` : ''}`
+      : tileText
+        ? `Re-tile existing: ${tileText}${glassText ? `, ${glassText}` : ''}`
+        : glassText
     const rows = [
-      row('Vanity', vanityText, r.cabinetFinish?.swatch),
+      row('Vanity', supplied('vanityId', vanityText), r.cabinetFinish?.swatch),
       row('Vanity top', r.countertop && `${r.countertop.brand} ${r.countertop.name}`, r.countertop?.swatch),
       row('Shower / tub', showerText, r.backsplash?.swatch),
-      row('Toilet', r.toilet && `${r.toilet.brand} ${r.toilet.name}`),
+      row('Toilet', supplied('toiletId', r.toilet && `${r.toilet.brand} ${r.toilet.name}`)),
       row('Fixtures', r.faucetFinish?.name, r.faucetFinish?.swatch),
       row('Hardware', r.hardwareFinish?.name, r.hardwareFinish?.swatch),
       row('Wall paint', r.paint && `${r.paint.brand} ${r.paint.name} (${r.paint.code})`, r.paint?.swatch),
-      row('Flooring', r.flooring?.name, r.flooring?.swatch),
-      row('Mirror & lighting', r.bathLight?.name),
+      row('Flooring', supplied('flooringId', r.flooring?.name), r.flooring?.swatch),
+      row('Mirror & lighting', supplied('bathLightId', r.bathLight?.name)),
     ]
     return opts.hideKept ? rows.filter((x) => !x.kept) : rows
   }
@@ -55,13 +64,18 @@ export function materialRows(selection: Selection, opts: { hideKept?: boolean; r
 
   const rows = [
     row('Cabinets', cabinetText, r.cabinetFinish?.swatch ?? r.cabinetLine?.swatch),
+    ...(r.islandFinish && r.islandFinish.id !== r.cabinetFinish?.id ? [row('Island cabinets', r.islandFinish.name, r.islandFinish.swatch)] : []),
     row('Countertop', r.countertop && `${r.countertop.brand} ${r.countertop.name} (${r.countertop.material.toLowerCase()})`, r.countertop?.swatch),
-    row('Backsplash', r.backsplash && `${r.backsplash.brand} ${r.backsplash.name}`, r.backsplash?.swatch),
+    ...(r.islandCountertop && r.islandCountertop.id !== r.countertop?.id
+      ? [row('Island top', `${r.islandCountertop.brand} ${r.islandCountertop.name} (${r.islandCountertop.material.toLowerCase()})`, r.islandCountertop.swatch)]
+      : []),
+    row('Backsplash', supplied('backsplashId', r.backsplash && `${r.backsplash.brand} ${r.backsplash.name}`), r.backsplash?.swatch),
     row('Hardware', r.hardwareFinish?.name, r.hardwareFinish?.swatch),
-    row('Sink & faucet', sinkText, r.faucetFinish?.swatch ?? r.sinkFaucet?.swatch),
+    row('Sink & faucet', supplied('sinkFaucetId', sinkText), r.faucetFinish?.swatch ?? r.sinkFaucet?.swatch),
     row('Wall paint', r.paint && `${r.paint.brand} ${r.paint.name} (${r.paint.code})`, r.paint?.swatch),
-    row('Flooring', r.flooring && `${r.flooring.name}`, r.flooring?.swatch),
-    row('Lighting', r.lighting?.name, r.lighting?.swatch),
+    row('Flooring', supplied('flooringId', r.flooring?.name), r.flooring?.swatch),
+    row('Lighting', supplied('lightingId', r.lighting?.name), r.lighting?.swatch),
+    ...(r.accessories.length ? [row('Accessories', r.accessories.map((a) => a.name).join(', '))] : []),
   ]
   return opts.hideKept ? rows.filter((x) => !x.kept) : rows
 }
